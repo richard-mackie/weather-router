@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Leaflet.windbarb Example</title>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="http://cdn.leafletjs.com/leaflet/v1.0.0-beta.2/leaflet.css"/>
+    <style>
+        body {
+            padding: 0;
+            margin: 0;
+        }
+        html, body, #map {
+            height: 100%;
+            width: 100%;
+        }
+    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+</head>
+<body>
+    <div id="map"></div>
+</body>
+    <script src="http://cdn.leafletjs.com/leaflet/v1.0.0-beta.2/leaflet.js"> </script>
+    <script type=text/javascript src="{{url_for('static', filename='js/leaflet-windbarb.js')}}"></script>
+    <script type=text/javascript src="{{url_for('static', filename='js/winddata1.js')}}"></script>
+
+    <script>
+    var map = L.map('map',{
+        minZoom: 3,
+        maxZoom: 12
+    }).setView([47.083098, 7.171154], 12);
+
+    L.tileLayer('http://stamen-tiles-{s}.a.ssl.fastly.net/toner-lite/{z}/{x}/{y}.{ext}', {
+        attribution: 'Wind barbs by <a href="http://www.geonet.ch">GeoNET</a> &mdash; Map tiles by <a href="http://stamen.com">Stamen Design</a>, <a href="http://creativecommons.org/licenses/by/3.0">CC BY 3.0</a> &mdash; Map data &copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+        subdomains: 'abcd',
+        ext: 'png'
+    }).addTo(map);
+
+    var meteoPoints = [
+       // [ 47.11285 , 7.222309, 5, 190], //Ipsach
+        //[ 47.085272, 7.20377 , 30, 90], //M�rigen
+        //[ 47.092285, 7.156734, 47, 170], //Twann
+       // [ 47.13294 , 7.220936, 92, 45], //Vingelz
+       // [ 47.088311, 7.128925, 125 , 280], //Twannberg
+       // [ 47.124765, 7.234669, 200, 135], //Nidau
+        [ 47.055107, 7.07159 , 2 , 360 ]  //lelanderon
+    ];
+
+    meteoPoints.forEach(function(p){
+        var icon = L.WindBarb.icon({deg: p[3], speed: p[2]});
+        var marker = L.marker([p[0], p[1]], {icon: icon}).addTo(map).bindPopup("<p>Wind Speed: "+p[2]+"</p>"+
+                                                                               "<p>Wind Direction: "+p[3]+"</p>");
+    });
+
+    //windpoints.windpoints.forEach(function(p){
+    //    console.log(p.geometry);
+    //    var icon = L.WindBarb.icon({deg: p.geometry.deg, speed: p.geometry.speed});
+    //    var marker = L.marker([p.geometry.lat, p.geometry.lon], {icon: icon}).addTo(map);});
+
+
+    var url = 'Leaflet.windbarb-master/example/pandas_wind_data.json';
+
+    fetch(url)
+    .then(res => res.json())
+    .then((out) => {
+      console.log('Checkout this JSON! ', out);
+    })
+    .catch(err => { throw err });
+
+
+    </script>
+</html>
