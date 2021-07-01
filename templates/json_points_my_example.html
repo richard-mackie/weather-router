@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Leaflet.windbarb Example</title>
+    <title>M Weather Routing</title>
     <meta charset="utf-8" />
-    <link rel="stylesheet" href="http://cdn.leafletjs.com/leaflet/v1.0.0-beta.2/leaflet.css"/>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
     <style>
         body {
             padding: 0;
@@ -16,29 +16,37 @@
     </style>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 </head>
+
 <body>
     <div id="map"></div>
 </body>
-    <script src="http://cdn.leafletjs.com/leaflet/v1.0.0-beta.2/leaflet.js"> </script>
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.0/jquery.min.js"></script>
     <script type=text/javascript src="{{url_for('static', filename='js/leaflet-windbarb.js')}}"></script>
 
     <script>
-    var map = L.map('map',{minZoom: 3,maxZoom: 14}).setView([47.083098, 7.171154], 14);
+        var map = L.map('map',{
+            worldCopyJump: true,
+            preferCanvas: true,
+            minZoom: 3,
+            maxZoom: 14,
+        }).setView([-41.2858, 174.78682], 2);
 
-    L.tileLayer('http://stamen-tiles-{s}.a.ssl.fastly.net/toner-lite/{z}/{x}/{y}.{ext}', {
-        attribution: 'Wind barbs by <a href="http://www.geonet.ch">GeoNET</a> &mdash; Map tiles by <a href="http://stamen.com">Stamen Design</a>, <a href="http://creativecommons.org/licenses/by/3.0">CC BY 3.0</a> &mdash; Map data &copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-        subdomains: 'abcd',
-        ext: 'png'
-    }).addTo(map);
+        mapLink ='<a href="http://openstreetmap.org">OpenStreetMap</a>';
+        L.tileLayer('http://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; ' + mapLink + ' Contributors',
+            }).addTo(map);
 
-
-    var wind={{data|tojson}};
-
-    wind.data.forEach(function(p){
-        console.log(p);
-        var icon = L.WindBarb.icon({deg: p.degree, speed: p.speed});
-        var marker = L.marker([p.latitude, p.longitude], {icon: icon}).addTo(map);});
+        var wind={{data|tojson}};
+        wind.data.forEach(function(p){
+            //var icon = L.WindBarb.icon({deg: p.degree, speed: p.speed});
+            L.circle([p.latitude, p.longitude]).addTo(map);
+            // Display the left and right map to seemlessly display edges of the map
+            L.circle([p.latitude, p.longitude - 360]).addTo(map);
+            L.circle([p.latitude, p.longitude + 360]).addTo(map);
+            //var marker = L.marker([p.latitude, p.longitude], {icon: icon}).addTo(map);
+            //var marker = L.marker([p.latitude, p.longitude], {icon: icon}).addTo(map);
+        });
 
     </script>
 </html>
