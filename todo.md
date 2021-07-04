@@ -12,3 +12,4 @@ For the presentation of the wind
 For the route planning
 5) use pygrib to read the values
 6) use the input from the map to select lat and long
+

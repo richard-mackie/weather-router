@@ -1,18 +1,16 @@
 import flask
 from flask import Flask, url_for, render_template, jsonify
-import utils, json
+import utils, json, os, glob
 
 app = Flask(__name__)
 
+grib_directory = './static/data/gribs/'
+json_directory = './static/data/json/'
+jsons = utils.get_jsons()
+
 @app.route('/')
 def test():
-    grib_directory = './static/data/gribs/'
-    json_directory = './static/data/json/'
-    grib_file = '20210702'
-
-    utils.create_wind_speed_and_degree_json(grib_directory, grib_file)
-    file = open(json_directory + grib_file + '.json', 'r')
-
+    file = open(json_directory + jsons[0], 'r')
     return render_template('json_points_my_example.html', data=json.load(file))
 
 #https://stackoverflow.com/questions/11178426/how-can-i-pass-data-from-flask-to-javascript-in-a-template
@@ -21,7 +19,7 @@ def test():
 def test1():
     grib_directory = 'static/data/gribs/'
     grib_file = '20210702'
-    data = utils.create_wind_speed_and_degree_json(grib_directory, grib_file)
+    data = utils.create_wind_spd_deg_jsons_from_all_gribs(grib_directory, grib_file)
 
     file = open('/home/richard/PycharmProjects/mweatherrouter/static/data/json/gfs.t12z.pgrb2.1p00.f000.json', 'r')
     jfile = json.load(file)
