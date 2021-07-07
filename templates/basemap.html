@@ -1,79 +1,52 @@
 <!DOCTYPE html>
-<html>
+<html lang="en" style="height: 100%; width: 100%;">
 <head>
     <title>Weather Route Training Simulator</title>
     <meta charset="utf-8" />
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
-    <script type=text/css src="{{url_for('static', filename='./js/plugins/Leaflet.TimeDimension/src/leaflet.timedimension.control.css')}}"></script>
-    <style>
-        body {
-            padding: 0;
-            margin: 0;
-        }
-        html, body, #map {
-            height: 100%;
-            width: 100%;
-        }
-    </style>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/styles/default.min.css">
+    <link rel="stylesheet" href="https://ppete2.github.io/Leaflet.PolylineMeasure/Leaflet.PolylineMeasure.css" />
+    <script type=text/css src="{{url_for('static', filename='./js/plugins/Leaflet.PolylineMeasure/Leaflet.PolylineMeasure.css')}}"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet-easybutton@2/src/easy-button.css">
 </head>
 
-<body>
-    <div id="map"></div>
-    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
-    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.0/jquery.min.js"></script>
+<body style="padding: 0; margin: 0; height: 100%; width: 100%;">
+    <div id="map" style="height: 100%; width: 100%"></div>
+    <script type="text/javascript" src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.0/jquery.min.js"></script>
     <script type=text/javascript src="{{url_for('static', filename='./js/plugins/Leaflet.windbarb/src/leaflet-windbarb.js')}}"></script>
-
-    <script type=text/javascript src="{{url_for('static', filename='./js/plugins/Leaflet.TimeDimension/src/leaflet.timedimension.js')}}"></script>
-    <script type=text/javascript src="{{url_for('static', filename='./js/plugins/Leaflet.TimeDimension/src/leaflet.timedimension.player.js')}}"></script>
-    <script type=text/javascript src="{{url_for('static', filename='./js/plugins/Leaflet.TimeDimension/src/leaflet.timedimension.layer.js')}}"></script>
-    <script type=text/javascript src="{{url_for('static', filename='./js/plugins/Leaflet.TimeDimension/src/leaflet.timedimension.control.js')}}"></script>
+    <script type=text/javascript src="{{url_for('static', filename='./js/plugins/Leaflet.PolylineMeasure/Leaflet.PolylineMeasure.js')}}"></script>
+    <script type=text/javascript src="{{url_for('static', filename='./js/app.js')}}"></script>
+    <script src="https://cdn.jsdelivr.net/npm/leaflet-easybutton@2/src/easy-button.js"></script>
 
     <script>
-        // Restricting the area of the the map for display
-        var maxBounds = L.latLngBounds({ lat: 52.56928286558243, lng: -95.88867187500001 }, { lat: 17.26672782352052, lng: -177.09960937500003 })
-
-        var map = L.map('map',{
-            worldCopyJump: true,
-            preferCanvas: true,
-            minZoom: 5,
-            maxZoom: 10,
-            maxBounds: maxBounds,
-            fullscreenControl: true,
-            timeDimensionControl: true,
-            timeDimensionControlOptions: {
-            timeSliderDragUpdate: true,
-            loopButton: true,
-            autoPlay: true,
-            playerOptions: {
-                transitionTime: 1000,
-                loop: true
-            }
-    },
-    timeDimension: true,
-        }).setView([35.5, -136.5], 5);
-
-        mapLink ='<a href="http://openstreetmap.org">OpenStreetMap</a>';
-        L.tileLayer('http://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; ' + mapLink + ' Contributors',
-            }).addTo(map);
-
         var wind={{data|tojson}};
-        wind.data.forEach(function(p){
-            // Display the left and right map to seemlessly display edges of the map
-            //L.circle([p.latitude, p.longitude]).addTo(map);
-            //L.circle([p.latitude, p.longitude + 360]).addTo(map);
-            if (maxBounds.contains([p.latitude, p.longitude - 360])){
-                //L.circle([p.latitude, p.longitude - 360]).addTo(map);
-                var icon = L.WindBarb.icon({deg: p.degree, speed: p.speed, pointRadius: 0, forceDir: false, strokeLength: 17, strokeWidth: 1});
-                var marker = L.marker([p.latitude, p.longitude - 360], {icon: icon}).addTo(map);
-            }
-        });
+        plotWindBarbs(wind);
 
-        function doStuff() {
-           console.log(map.getBounds());
-        }
-        //setInterval(doStuff, 1000);
+        L.easyButton('poly_line', function(btn, map) {
+            var polydata = polylineMeasure._arrPolylines;
+            // Need to remove the cyclic nature of the polyline to jsonify it https://stackoverflow.com/questions/9382167/serializing-object-that-contains-cyclic-object-value//
+            var seen = [];
+            var stripped_polydata = JSON.stringify(polydata, function(key, val) {
+               if (val != null && typeof val == "object") {
+                    if (seen.indexOf(val) >= 0) {
+                        return;
+                    }
+                seen.push(val);
+                }
+                return val;
+            });
+            console.log(JSON.stringify(stripped_polydata));
+            $.ajax({
+            url: "/",
+            type: "POST",
+            contentType: "application/json",
+            data: JSON.stringify(stripped_polydata),
+            success: function(data){/* do something */}
+});
+        }).addTo(map);
     </script>
+
 </body>
 </html>

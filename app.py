@@ -1,5 +1,5 @@
 import flask
-from flask import Flask, url_for, render_template, jsonify
+from flask import Flask, url_for, render_template, jsonify, request
 import utils, json, os, glob
 
 app = Flask(__name__)
@@ -8,10 +8,12 @@ grib_directory = './static/data/gribs/'
 json_directory = './static/data/json/'
 jsons = utils.get_jsons()
 
-@app.route('/')
+@app.route('/', methods = ['GET','POST'])
 def test():
     file = open(json_directory + jsons[0], 'r')
-    return render_template('json_points_my_example.html', data=json.load(file))
+    line = request.get_json()
+    print(line)
+    return render_template('basemap.html', data=json.load(file))
 
 #https://stackoverflow.com/questions/11178426/how-can-i-pass-data-from-flask-to-javascript-in-a-template
 #https://stackoverflow.com/questions/36167086/separating-html-and-javascript-in-flask/36167179
@@ -24,7 +26,7 @@ def test1():
     file = open('/home/richard/PycharmProjects/mweatherrouter/static/data/json/gfs.t12z.pgrb2.1p00.f000.json', 'r')
     jfile = json.load(file)
 
-    return render_template('pass_json_test.html', data=jfile)
+    return render_template('pass_data_json_test.html', data=jfile)
 
 if __name__ == '__main__':
     app.run(use_reloader = True, debug=True)

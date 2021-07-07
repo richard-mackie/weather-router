@@ -11,6 +11,7 @@ def create_wind_spd_deg_jsons_from_all_gribs(input_dir='./static/data/gribs/', o
     else:
         for grib in all_gribs:
             ds = xarray.open_dataset(input_dir + grib, engine='cfgrib')
+            #ds = ds.where((ds.latitude >= 25) & (ds.latitude <= 35), drop=True) This can filter out points we dont want
             ds['speed'] = (('latitude', 'longitude'), np.sqrt(np.square(ds['u10']) + np.square(ds['v10'])))
             ds['degree'] = (('latitude', 'longitude'), 180 + np.rad2deg(np.arctan2(ds['v10'], ds['u10'])))
             result = ds.to_dataframe()[['speed','degree']].to_json(orient='table', indent=4)
@@ -31,7 +32,7 @@ def get_gribs(degrees=1, left_lon=0, right_lon=360, top_lat=90, bottom_lat=-90, 
     FFF = ['000', '012', '024','036']
 
     if len(YYYYMMDD) == 0:
-        YYYYMMDD = str(datetime.datetime.utcnow().date()).replace('-','')
+        YYYYMMDD = str(datetime.datetime.now().date()).replace('-','')
     print('Downloading Gribs', end='', flush=True)
     for i in range(len(FFF)):
         print('.', end='', flush=True)
@@ -48,7 +49,6 @@ def slice_lat_lon(ds):
     '''Used for preprocessing to reduce the size of the datasets before merging'''
     ds = ds.drop('time')
     return ds.isel(latitude=slice(0, 3), longitude=slice(0, 3))
-
 
 def get_jsons():
     '''
