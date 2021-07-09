@@ -17,7 +17,27 @@ var map = L.map('map',{
 let polylineMeasure = L.control.polylineMeasure ({position:'topleft', unit:'nautical', showBearings:true, clearMeasurementsOnStop: false, showClearControl: true, showUnitControl: false})
 polylineMeasure.addTo(map);
 
-
+// Add submit routes button to the leaflet. Sends the data back to flask as a json.
+L.easyButton('<img src="./static/images/anchor.svg">',function(btn, map) {
+    // This holds all of the polylines
+    var polydata = polylineMeasure._arrPolylines;
+    // Each line is a route the user created
+    var lines = []
+    for (i in polydata)
+        lines.push(polydata[i].polylinePath._latlngs);
+        // Dont allow submission without the user creating a route
+        if(lines.length > 0) {
+            console.log(polydata)
+            $.ajax({
+                url: "/",
+                type: "POST",
+                contentType: "application/json",
+                data: JSON.stringify(lines)
+        })
+    } else {
+        alert('Create a route to submit');
+    };
+}).addTo(map);
 
 //Takes wind data in the form of a json and plots windbarbs with a speed and direction on the map
 function plotWindBarbs(winddata){

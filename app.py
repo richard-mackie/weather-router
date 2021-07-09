@@ -11,23 +11,16 @@ jsons = utils.get_jsons()
 @app.route('/', methods = ['GET','POST'])
 def test():
     file = open(json_directory + jsons[0], 'r')
-    line = request.get_json()
-    print(line)
+    if request.method == 'POST':
+        routes = {}
+        line = request.get_json()
+        for i in range(len(line)):
+            routes[i] = line[i]
+        utils.get_wind_speed_and_degree_for_routes(routes=routes)
     return render_template('basemap.html', data=json.load(file))
 
 #https://stackoverflow.com/questions/11178426/how-can-i-pass-data-from-flask-to-javascript-in-a-template
 #https://stackoverflow.com/questions/36167086/separating-html-and-javascript-in-flask/36167179
-@app.route('/test')
-def test1():
-    grib_directory = 'static/data/gribs/'
-    grib_file = '20210702'
-    data = utils.create_wind_spd_deg_jsons_from_all_gribs(grib_directory, grib_file)
-
-    file = open('/home/richard/PycharmProjects/mweatherrouter/static/data/json/gfs.t12z.pgrb2.1p00.f000.json', 'r')
-    jfile = json.load(file)
-
-    return render_template('pass_data_json_test.html', data=jfile)
-
 if __name__ == '__main__':
     app.run(use_reloader = True, debug=True)
 
