@@ -42,9 +42,6 @@ L.easyButton('<img src="./static/images/anchor.svg">',function(btn, map) {
 //Takes wind data in the form of a json and plots windbarbs with a speed and direction on the map
 function plotWindBarbs(winddata){
     wind.data.forEach(function(p){
-    // Display the left and right map to seemlessly display edges of the map
-    //L.circle([p.latitude, p.longitude]).addTo(map);
-    //L.circle([p.latitude, p.longitude + 360]).addTo(map);
     if (maxBounds.contains([p.latitude, p.longitude - 360])){
         // need to take - 360 of longitude due to noaa grib generation
         var icon = L.WindBarb.icon({deg: p.degree, speed: p.speed, pointRadius: 0, forceDir: false, strokeLength: 17, strokeWidth: 1});

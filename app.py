@@ -12,10 +12,7 @@ jsons = utils.get_jsons()
 def test():
     file = open(json_directory + jsons[0], 'r')
     if request.method == 'POST':
-        routes = {}
-        line = request.get_json()
-        for i in range(len(line)):
-            routes[i] = line[i]
+        routes = request.get_json()
         utils.get_wind_speed_and_degree_for_routes(routes=routes)
     return render_template('basemap.html', data=json.load(file))
 
