@@ -2,6 +2,9 @@ import numpy as np
 import glob, os, time, requests, xarray, datetime, math
 import pandas as pd
 
+import utils
+
+
 def create_wind_spd_deg_jsons_from_all_gribs(input_dir='./static/data/gribs/', output_dir='./static/data/json/', verbose=False):
     '''Takes a grib file and converts to a json file'''
     os.chdir(input_dir)
@@ -92,6 +95,7 @@ def get_wind_speed_and_degree_for_routes(routes):
     from haversine import haversine, Unit
     route = routes.pop()
     route_segments = []
+    start_time = datetime.timedelta(minutes=0, seconds=0)
     for i in range(len(route) - 1):
         # Need to convert the leaflet coordinate system back to gfs system
         # TODO create a single cordinate system
@@ -99,16 +103,20 @@ def get_wind_speed_and_degree_for_routes(routes):
         start_lng = route[i]['lng'] + 360
         finish_lat = route[i + 1]['lat']
         finish_lng = route[i + 1]['lng'] + 360
-        distance = haversine((start_lat, start_lng), (finish_lat, finish_lng), unit=Unit.NAUTICAL_MILES)
+        distance = int(haversine((start_lat, start_lng), (finish_lat, finish_lng), unit=Unit.NAUTICAL_MILES))
         wind_speed = ds.sel(latitude=start_lat, longitude=start_lng, method='nearest')['speed'].values.item()
         wind_degree = ds.sel(latitude=start_lat, longitude=start_lng, method='nearest')['degree'].values.item()
         course_bearing = calculate_initial_compass_bearing((start_lat, start_lng), (finish_lat, finish_lng))
         true_wind_angle = calculate_true_wind_angle(course_bearing, wind_degree)
-        boat_speed = None
-        time = None
-        route_segment = {'id': i, 'start': (start_lat, start_lng), 'finish': (finish_lat, finish_lng), 'distance': distance, 'wind_speed': wind_speed,
-                         'wind_degree': wind_degree, 'course_bearing':course_bearing}
-        print(route_segment)
+        boat_speed = int(utils.get_boat_speed(true_wind_angle, wind_speed))
+        # This gives us a mininum boat speed of 1 knot, the polar diagrams are not completely filled out.
+        time = start_time + datetime.timedelta(hours=distance/max(boat_speed, 1))
+        route_segment = {'id': i, 'start_lat_lon': (start_lat, start_lng), 'finish_lat_lon': (finish_lat, finish_lng), 'distance': distance, 'wind_speed': wind_speed,
+                         'wind_degree': wind_degree, 'course_bearing':course_bearing, 'boat_speed':boat_speed, 'time':time}
+        #(route_segment)
+        route_segments.append(route_segment)
+        start_time = time
+    return route_segments[-1]['time']
 
 def calculate_initial_compass_bearing(pointA, pointB):
     """
@@ -164,8 +172,10 @@ def calculate_true_wind_angle(heading, wind_degree):
     return abs(result)
 
 def get_boat_speed(true_wind_angle, wind_speed):
-    boat_polar_table = pd.read_csv('./static/data/boat_polars/express37', header=0, sep=';', index_col='twa/tws')
-
-    result = boat_polar_table.iloc[boat_polar_table.index.get_loc(true_wind_angle, method='nearest')]
-    return result
-
+    df = pd.read_csv('./static/data/boat_polars/express37', header=0, sep=';')
+    df.set_index('twa/tws')
+    # This selects the row of the correct wind angle
+    polar_angle = df.iloc[abs(df['twa/tws'] - true_wind_angle).idxmin()]
+    # This selects the correct wind speed in the chosen row, +1 is to offset the index column
+    polar_speed = abs(polar_angle.values[1:] - wind_speed).argmin() + 1
+    return polar_angle.iloc[polar_speed]

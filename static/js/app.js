@@ -14,29 +14,38 @@ var map = L.map('map',{
     layers: [openStreetsMap]
 }).setView([35.5, -136.5], 5);
 
-let polylineMeasure = L.control.polylineMeasure ({position:'topleft', unit:'nautical', showBearings:true, clearMeasurementsOnStop: false, showClearControl: true, showUnitControl: false})
+let polylineMeasure = L.control.polylineMeasure ({position:'topleft', unit:'nauticalmiles', showBearings:true, clearMeasurementsOnStop: false, showClearControl: true, showUnitControl: false})
 polylineMeasure.addTo(map);
 
 // Add submit routes button to the leaflet. Sends the data back to flask as a json.
-L.easyButton('<img src="./static/images/anchor.svg">',function(btn, map) {
+L.easyButton('<img src="./static/images/anchor.svg">',function() {
     // This holds all of the polylines
     var polydata = polylineMeasure._arrPolylines;
     // Each line is a route the user created
     var lines = []
+
     for (i in polydata)
         lines.push(polydata[i].polylinePath._latlngs);
-        // Dont allow submission without the user creating a route
-        if(lines.length > 0) {
-            console.log(polydata)
-            $.ajax({
-                url: "/",
-                type: "POST",
-                contentType: "application/json",
-                data: JSON.stringify(lines)
-        })
+    // Don't allow submission without the user creating a route
+    if (lines.length > 0) {
+        console.log(polydata)
+        $.ajax({
+            url: "/process_user_route",
+            type: "POST",
+            contentType: "application/json",
+            data: JSON.stringify(lines)
+        }).then(function (test) {
+            return $.ajax({
+                url: "/process_user_route",
+                type: "GET",
+                data: JSON.stringify(test),
+                dataType: "json",
+                success: alert('Your route took ' + JSON.stringify(test['time']))
+            })
+        });
     } else {
         alert('Create a route to submit');
-    };
+    }
 }).addTo(map);
 
 //Takes wind data in the form of a json and plots windbarbs with a speed and direction on the map
@@ -130,7 +139,13 @@ function doStuff() {
     //console.log(map.getBounds());
     //console.log(start.latlng)
     //console.log(finish.latlng)
-
+    $.ajax({
+                url: "/",
+                type: "GET",
+                contentType: "application/json",
+                data: JSON.stringify(time)
+        })
+    console.log(time)
 }
 
 
