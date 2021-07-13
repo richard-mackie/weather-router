@@ -1,8 +1,7 @@
 import numpy as np
 import glob, os, time, requests, xarray, datetime, math
 import pandas as pd
-
-import utils
+from haversine import haversine, Unit
 
 
 def create_wind_spd_deg_jsons_from_all_gribs(input_dir='./static/data/gribs/', output_dir='./static/data/json/', verbose=False):
@@ -89,11 +88,12 @@ def get_jsons():
         os.chdir('/home/richard/PycharmProjects/mweatherrouter')
     return jsons
 
-def get_wind_speed_and_degree_for_routes(routes):
-    # TODO remove hard coded reference
-    ds = xarray.open_dataset('./static/data/netcdf/20210709.1p00.000.nc')
-    from haversine import haversine, Unit
-    route = routes.pop()
+def get_wind_speed_and_degree_for_routes(route):
+    netcdf_dir = './static/data/netcdf/'
+    os.chdir(netcdf_dir)
+    all_gribs = [file for file in glob.glob('*.nc')]
+    os.chdir('/home/richard/PycharmProjects/mweatherrouter')
+    ds = xarray.open_dataset(netcdf_dir + all_gribs[0])
     route_segments = []
     start_time = datetime.timedelta(minutes=0, seconds=0)
     for i in range(len(route) - 1):
@@ -103,12 +103,12 @@ def get_wind_speed_and_degree_for_routes(routes):
         start_lng = route[i]['lng'] + 360
         finish_lat = route[i + 1]['lat']
         finish_lng = route[i + 1]['lng'] + 360
-        distance = int(haversine((start_lat, start_lng), (finish_lat, finish_lng), unit=Unit.NAUTICAL_MILES))
+        distance = haversine((start_lat, start_lng), (finish_lat, finish_lng), unit=Unit.NAUTICAL_MILES)
         wind_speed = ds.sel(latitude=start_lat, longitude=start_lng, method='nearest')['speed'].values.item()
         wind_degree = ds.sel(latitude=start_lat, longitude=start_lng, method='nearest')['degree'].values.item()
         course_bearing = calculate_initial_compass_bearing((start_lat, start_lng), (finish_lat, finish_lng))
         true_wind_angle = calculate_true_wind_angle(course_bearing, wind_degree)
-        boat_speed = int(utils.get_boat_speed(true_wind_angle, wind_speed))
+        boat_speed = get_boat_speed(true_wind_angle, wind_speed)
         # This gives us a mininum boat speed of 1 knot, the polar diagrams are not completely filled out.
         time = start_time + datetime.timedelta(hours=distance/max(boat_speed, 1))
         route_segment = {'id': i, 'start_lat_lon': (start_lat, start_lng), 'finish_lat_lon': (finish_lat, finish_lng), 'distance': distance, 'wind_speed': wind_speed,
@@ -179,3 +179,7 @@ def get_boat_speed(true_wind_angle, wind_speed):
     # This selects the correct wind speed in the chosen row, +1 is to offset the index column
     polar_speed = abs(polar_angle.values[1:] - wind_speed).argmin() + 1
     return polar_angle.iloc[polar_speed]
+
+def optimal_route(start_lat, start_lng, finish_lat, finish_lng):
+    distance = haversine((start_lat, start_lng), (finish_lat, finish_lng), unit=Unit.NAUTICAL_MILES)
+

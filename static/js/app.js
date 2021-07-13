@@ -27,6 +27,7 @@ L.easyButton('<img src="./static/images/anchor.svg">',function() {
     for (i in polydata)
         lines.push(polydata[i].polylinePath._latlngs);
     // Don't allow submission without the user creating a route
+    //https://stackoverflow.com/questions/53463808/jquery-ajax-call-inside-a-then-function
     if (lines.length > 0) {
         console.log(polydata)
         $.ajax({
@@ -41,7 +42,10 @@ L.easyButton('<img src="./static/images/anchor.svg">',function() {
                 data: JSON.stringify(test),
                 dataType: "json",
                 success: alert('Your route took ' + JSON.stringify(test['time']))
-            })
+            }).then(function () {
+                // This stops the callback hell!
+                return
+            });
         });
     } else {
         alert('Create a route to submit');
