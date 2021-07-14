@@ -1,8 +1,7 @@
 import numpy as np
 import glob, os, time, requests, xarray, datetime, math
 import pandas as pd
-from haversine import haversine, Unit
-
+import pyproj
 
 def create_wind_spd_deg_jsons_from_all_gribs(input_dir='./static/data/gribs/', output_dir='./static/data/json/', verbose=False):
     '''Takes a grib file and converts to a json file'''
@@ -96,6 +95,9 @@ def get_wind_speed_and_degree_for_routes(route):
     ds = xarray.open_dataset(netcdf_dir + all_gribs[0])
     route_segments = []
     start_time = datetime.timedelta(minutes=0, seconds=0)
+
+    g = pyproj.Geod(ellps='clrk66')  # Use Clarke 1866 ellipsoid.
+
     for i in range(len(route) - 1):
         # Need to convert the leaflet coordinate system back to gfs system
         # TODO create a single cordinate system
@@ -103,7 +105,12 @@ def get_wind_speed_and_degree_for_routes(route):
         start_lng = route[i]['lng'] + 360
         finish_lat = route[i + 1]['lat']
         finish_lng = route[i + 1]['lng'] + 360
-        distance = haversine((start_lat, start_lng), (finish_lat, finish_lng), unit=Unit.NAUTICAL_MILES)
+
+        # https://pyproj4.github.io/pyproj/stable/api/geod.html
+        azimuth1,azimuth2, distance = g.inv(start_lng, start_lat, finish_lng, finish_lat)
+        # Convert meters to nautical miles
+        distance *= 0.000539957
+
         wind_speed = ds.sel(latitude=start_lat, longitude=start_lng, method='nearest')['speed'].values.item()
         wind_degree = ds.sel(latitude=start_lat, longitude=start_lng, method='nearest')['degree'].values.item()
         course_bearing = calculate_initial_compass_bearing((start_lat, start_lng), (finish_lat, finish_lng))
@@ -180,6 +187,29 @@ def get_boat_speed(true_wind_angle, wind_speed):
     polar_speed = abs(polar_angle.values[1:] - wind_speed).argmin() + 1
     return polar_angle.iloc[polar_speed]
 
+class Node:
+    def __init__(self, lat, lng, time, parent):
+        self.lat = lat
+        self.lng = lng
+        self.time = datetime.timedelta(seconds=time).seconds
+        self.parent = parent
+
+class Isochrone_Router:
+    def __init__(self, start_lat, start_lng, finish_lat, finish_lng):
+        self.start_lat = start_lat
+        self.start_lng = start_lng
+        self.finish_lat = finish_lat
+        self.finish_lng = finish_lng
+
 def optimal_route(start_lat, start_lng, finish_lat, finish_lng):
-    distance = haversine((start_lat, start_lng), (finish_lat, finish_lng), unit=Unit.NAUTICAL_MILES)
+
+    exploration_degree = [deg for deg in range(-180, 190, 10)]
+
+
+
+    print(start_lat,start_lng,finish_lat,finish_lng)
+
+
+
+
 

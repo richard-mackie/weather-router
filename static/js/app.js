@@ -52,6 +52,29 @@ L.easyButton('<img src="./static/images/anchor.svg">',function() {
     }
 }).addTo(map);
 
+// Add submit routes button to the leaflet. Sends the data back to flask as a json.
+L.easyButton('<img src="./static/images/check-square.svg">', function() {
+    // This holds all of the polylines
+    var polydata = polylineMeasure._arrPolylines;
+    // Each line is a route the user created
+    var lines = []
+    for (i in polydata)
+        lines.push(polydata[i].polylinePath._latlngs);
+    // Don't allow submission without the user creating a route
+    //https://stackoverflow.com/questions/53463808/jquery-ajax-call-inside-a-then-function
+    if (lines.length > 0) {
+        console.log(polydata)
+        $.ajax({
+            url: "/calculate_optimal_route",
+            type: "POST",
+            contentType: "application/json",
+            data: JSON.stringify(lines)
+        })
+    } else {
+        alert('Create a route to submit');
+    }
+}).addTo(map);
+
 //Takes wind data in the form of a json and plots windbarbs with a speed and direction on the map
 function plotWindBarbs(winddata){
     wind.data.forEach(function(p){
@@ -139,18 +162,18 @@ var overlayMaps = {
 
 L.control.layers(overlayMaps).addTo(map);
 
+// TODO use selected layer
+map.on('baselayerchange', function (e) {
+    console.log(e.layer);
+});
+
 function doStuff() {
     //console.log(map.getBounds());
     //console.log(start.latlng)
     //console.log(finish.latlng)
-    $.ajax({
-                url: "/",
-                type: "GET",
-                contentType: "application/json",
-                data: JSON.stringify(time)
-        })
-    console.log(time)
+    console.log($('.leaflet-control-layers-selector:checked'))
 }
+
 
 
 //;

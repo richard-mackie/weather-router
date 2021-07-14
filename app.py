@@ -23,6 +23,18 @@ def process():
     res = make_response(jsonify({'time':string_time}), 200)
     return res
 
+@app.route('/calculate_optimal_route', methods=['GET','POST'])
+def router():
+    routes = request.get_json()
+    start = routes[0][0]
+    finish = routes[0][-1]
+    optimal_route = utils.optimal_route(start_lat=start['lat'],
+                                        start_lng=start['lng'],
+                                        finish_lat=finish['lat'],
+                                        finish_lng=finish['lng'])
+    res = make_response(jsonify({'optimal_route':'placeholder'}), 200)
+    return res
+
 if __name__ == '__main__':
     app.run(use_reloader = True, debug=True)
 
