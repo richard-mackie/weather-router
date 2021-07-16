@@ -162,7 +162,7 @@ def get_boat_speed(true_wind_angle, wind_speed):
     polar_speed = abs(polar_angle.values[1:] - wind_speed).argmin() + 1
     return polar_angle.iloc[polar_speed]
 
-def optimal_route(start, finish, max_steps=2):
+def optimal_route(start, finish, max_steps=1):
     os.chdir(netcdf_dir)
     all_netcdfs = [file for file in glob.glob('*.nc')]
     os.chdir('/home/richard/PycharmProjects/mweatherrouter')
@@ -184,7 +184,7 @@ def optimal_route(start, finish, max_steps=2):
                 all_headings = [deg for deg in range(0, 361, 1)]
             else:
                 azimuth1, azimuth2, distance = globe.inv(point.parent.lng, point.parent.lat, point.lng, point.lat)
-                all_headings = [azimuth1 - 359]
+                all_headings = [azimuth1 - 360]
             for heading in all_headings:
                 true_wind_angle = calculate_true_wind_angle(heading, wind_degree)
                 speed = get_boat_speed(true_wind_angle, wind_speed)
