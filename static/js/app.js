@@ -28,24 +28,21 @@ L.easyButton('<img src="./static/images/anchor.svg">',function() {
         lines.push(polydata[i].polylinePath._latlngs);
     // Don't allow submission without the user creating a route
     //https://stackoverflow.com/questions/53463808/jquery-ajax-call-inside-a-then-function
-    if (lines.length > 0) {
+    if (lines.length > 0){
         console.log(polydata)
         $.ajax({
             url: "/process_user_route",
             type: "POST",
             contentType: "application/json",
             data: JSON.stringify(lines)
-        }).then(function (test) {
-            return $.ajax({
+        }).then(function (time) {
+            $.ajax({
                 url: "/process_user_route",
                 type: "GET",
-                data: JSON.stringify(test),
+                data: JSON.stringify(time),
                 dataType: "json",
-                success: alert('Your route took ' + JSON.stringify(test['time']))
-            }).then(function () {
-                // This stops the callback hell!
-                return
-            });
+                success: show_users_time(time)
+            })
         });
     } else {
         alert('Create a route to submit');
@@ -62,14 +59,22 @@ L.easyButton('<img src="./static/images/check-square.svg">', function() {
         lines.push(polydata[i].polylinePath._latlngs);
     // Don't allow submission without the user creating a route
     //https://stackoverflow.com/questions/53463808/jquery-ajax-call-inside-a-then-function
-    if (lines.length > 0) {
+    if (lines.length > 0){
         console.log(polydata)
         $.ajax({
-            url: "/calculate_optimal_route",
+            url: '/calculate_optimal_route',
             type: "POST",
             contentType: "application/json",
             data: JSON.stringify(lines)
-        })
+        }).then(function (test) {
+            $.ajax({
+                url: '/calculate_optimal_route',
+                type: "GET",
+                data: JSON.stringify(test),
+                dataType: "json",
+                success: plot_isochrone(test)
+            })
+        });
     } else {
         alert('Create a route to submit');
     }
@@ -174,11 +179,20 @@ function doStuff() {
     console.log($('.leaflet-control-layers-selector:checked'))
 }
 
+function show_users_time(time){
+    alert('Your route took ' + JSON.stringify(time['time']))
+    return false
+}
 
+function plot_isochrone(latlngs){
+    console.log(latlngs)
+    var polyline = L.polyline(latlngs, {color: 'red', weight: 1}).addTo(map);
+    return false
+}
 
 //;
 // Show Coordinates on click
-//map.on("contextmenu", function (event) {
+//map.on("contextmenu", function (event) {2
 //  console.log("Coordinates: " + event.latlng.toString());
 //  L.marker(event.latlng).addTo(map);
 //});

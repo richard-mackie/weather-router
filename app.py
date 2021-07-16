@@ -17,7 +17,7 @@ def index():
 @app.route('/process_user_route', methods=['GET','POST'])
 def process():
     routes = request.get_json()
-    time = utils.get_wind_speed_and_degree_for_routes(route=routes[0])
+    time = utils.get_wind_speed_and_degree_for_routes(routes=routes)
     string_time = '{} days {} hours {} minutes'.format(time.days, time.seconds//3600, (time.seconds//60)%60)
     print(string_time)
     res = make_response(jsonify({'time':string_time}), 200)
@@ -28,11 +28,9 @@ def router():
     routes = request.get_json()
     start = routes[0][0]
     finish = routes[0][-1]
-    optimal_route = utils.optimal_route(start_lat=start['lat'],
-                                        start_lng=start['lng'],
-                                        finish_lat=finish['lat'],
-                                        finish_lng=finish['lng'])
-    res = make_response(jsonify({'optimal_route':'placeholder'}), 200)
+    optimal_route = utils.optimal_route(start, finish)
+    lat_lngs = [(point.lat, point.lng) for point in optimal_route]
+    res = make_response(jsonify(lat_lngs), 200)
     return res
 
 if __name__ == '__main__':

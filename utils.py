@@ -1,9 +1,26 @@
 import numpy as np
 import glob, os, time, requests, xarray, datetime, math
 import pandas as pd
-import pyproj
+from pyproj import Geod
+from shapely.geometry import Point, Polygon
 
-def create_wind_spd_deg_jsons_from_all_gribs(input_dir='./static/data/gribs/', output_dir='./static/data/json/', verbose=False):
+# Directory References
+netcdf_dir = './static/data/netcdf/'
+grib_dir = './static/data/gribs/'
+json_dir = './static/data/json/'
+
+# Used for geodesic calculations
+globe = Geod(ellps='clrk66')  # Use Clarke 1866 ellipsoid.
+
+class Node:
+    def __init__(self, lat, lng, time, parent, heading):
+        self.lat = lat
+        self.lng = lng
+        self.time = datetime.timedelta(seconds=time).seconds
+        self.parent = parent
+        self.heading = heading
+
+def create_wind_spd_deg_jsons_from_all_gribs(input_dir=grib_dir, output_dir=json_dir, verbose=False):
     '''Takes a grib file and converts to a json file'''
     os.chdir(input_dir)
     all_gribs = [file for file in glob.glob('*.grib2')]
@@ -21,7 +38,7 @@ def create_wind_spd_deg_jsons_from_all_gribs(input_dir='./static/data/gribs/', o
             #ds = ds.assign(degree=(180/np.pi) * np.arctan2(-ds['u10'], -ds['v10']))
             ds = ds.assign(degree=(270 - np.arctan2(ds['v10'], ds['u10']) * (180 / np.pi)) % 360)
             # Save the modified data to the netcdf folder so we can refer to it later with netcdf
-            ds.to_netcdf('./static/data/netcdf/' + filename.replace('grib2', 'nc'))
+            ds.to_netcdf(netcdf_dir + filename.replace('grib2', 'nc'))
             pandas_result = ds.to_dataframe()[['speed','degree']].to_json(orient='table', indent=4)
             # Save the modified data for leaflet presentation
             with open(output_dir + filename.replace('grib2', 'json'), 'w') as outfile:
@@ -33,7 +50,6 @@ def get_gribs(degrees=1, left_lon=0, right_lon=360, top_lat=90, bottom_lat=-90, 
     :params: YYYYMMDD is the Year, Month and Day
     :returns:Nothing
     '''
-    grib_directory = 'static/data/gribs/'
     DEG = {.25:'0p25', .5:'0p50', 1: '1p00'} # TODO only 1 is working atm
     # CC is the model cycle runtime (i.e. 00, 06, 12, 18) just using the first one as this doesn't really matter for simulation purposes
     CC = '00' # TODO Take the most recent forecast, currently just using the midnight since it's easy
@@ -49,7 +65,7 @@ def get_gribs(degrees=1, left_lon=0, right_lon=360, top_lat=90, bottom_lat=-90, 
               '&lev_10_m_above_ground=on&var_UGRD=on&var_VGRD=on&leftlon={}&rightlon={}&toplat={}&bottomlat={}&dir=%2Fgfs.{}%2F00%2Fatmos'.format(DEG[degrees], FFF[i], left_lon, right_lon, top_lat, bottom_lat, YYYYMMDD)
         file_name = YYYYMMDD + '.' + DEG[degrees] + '.' + FFF[i] + '.grib2'
         r = requests.get(url, allow_redirects=True)
-        open(grib_directory + file_name, 'wb').write(r.content)
+        open(grib_dir + file_name, 'wb').write(r.content)
         # Do not upset NOAA servers
         time.sleep(1)
     print(flush=True)
@@ -64,39 +80,36 @@ def get_jsons():
     Get the jsons update the directories as neededd
     :return:
     '''
-    grib_directory = './static/data/gribs/'
-    json_directory = './static/data/json/'
     # Get the JSONs to serve up for the wind
-    os.chdir(json_directory)
+    os.chdir(json_dir)
     jsons = [file for file in glob.glob('*.json')]
     jsons.sort()
     os.chdir('/home/richard/PycharmProjects/mweatherrouter')
 
     # If there are no jsons then check to see if there are any gribs available to convert, if not then get some
     if len(jsons) == 0:
-        os.chdir(grib_directory)
+        os.chdir(grib_dir)
         gribs = [file for file in glob.glob('*.grib2')]
         gribs.sort()
         os.chdir('/home/richard/PycharmProjects/mweatherrouter')
         if len(gribs) == 0:
             get_gribs(degrees=1)
         create_wind_spd_deg_jsons_from_all_gribs()
-        os.chdir(json_directory)
+        os.chdir(json_dir)
         jsons = [file for file in glob.glob('*.json')]
         jsons.sort()
         os.chdir('/home/richard/PycharmProjects/mweatherrouter')
     return jsons
 
-def get_wind_speed_and_degree_for_routes(route):
-    netcdf_dir = './static/data/netcdf/'
+def get_wind_speed_and_degree_for_routes(routes):
     os.chdir(netcdf_dir)
-    all_gribs = [file for file in glob.glob('*.nc')]
+    all_netcdfs = [file for file in glob.glob('*.nc')]
     os.chdir('/home/richard/PycharmProjects/mweatherrouter')
-    ds = xarray.open_dataset(netcdf_dir + all_gribs[0])
+    ds = xarray.open_dataset(netcdf_dir + all_netcdfs[0])
+    route = routes[0]
+
     route_segments = []
     start_time = datetime.timedelta(minutes=0, seconds=0)
-
-    g = pyproj.Geod(ellps='clrk66')  # Use Clarke 1866 ellipsoid.
 
     for i in range(len(route) - 1):
         # Need to convert the leaflet coordinate system back to gfs system
@@ -107,15 +120,17 @@ def get_wind_speed_and_degree_for_routes(route):
         finish_lng = route[i + 1]['lng'] + 360
 
         # https://pyproj4.github.io/pyproj/stable/api/geod.html
-        azimuth1,azimuth2, distance = g.inv(start_lng, start_lat, finish_lng, finish_lat)
+        azimuth1, azimuth2, distance = globe.inv(start_lng, start_lat, finish_lng, finish_lat)
         # Convert meters to nautical miles
         distance *= 0.000539957
+        course_bearing = azimuth2 + 180
 
         wind_speed = ds.sel(latitude=start_lat, longitude=start_lng, method='nearest')['speed'].values.item()
         wind_degree = ds.sel(latitude=start_lat, longitude=start_lng, method='nearest')['degree'].values.item()
-        course_bearing = calculate_initial_compass_bearing((start_lat, start_lng), (finish_lat, finish_lng))
+
         true_wind_angle = calculate_true_wind_angle(course_bearing, wind_degree)
         boat_speed = get_boat_speed(true_wind_angle, wind_speed)
+
         # This gives us a mininum boat speed of 1 knot, the polar diagrams are not completely filled out.
         time = start_time + datetime.timedelta(hours=distance/max(boat_speed, 1))
         route_segment = {'id': i, 'start_lat_lon': (start_lat, start_lng), 'finish_lat_lon': (finish_lat, finish_lng), 'distance': distance, 'wind_speed': wind_speed,
@@ -124,46 +139,6 @@ def get_wind_speed_and_degree_for_routes(route):
         route_segments.append(route_segment)
         start_time = time
     return route_segments[-1]['time']
-
-def calculate_initial_compass_bearing(pointA, pointB):
-    """
-    Credit: https://gist.github.com/jeromer/2005586
-    Calculates the bearing between two points.
-    The formulae used is the following:
-        θ = atan2(sin(Δlong).cos(lat2),
-                  cos(lat1).sin(lat2) − sin(lat1).cos(lat2).cos(Δlong))
-    :Parameters:
-      - `pointA: The tuple representing the latitude/longitude for the
-        first point. Latitude and longitude must be in decimal degrees
-      - `pointB: The tuple representing the latitude/longitude for the
-        second point. Latitude and longitude must be in decimal degrees
-    :Returns:
-      The bearing in degrees
-    :Returns Type:
-      float
-
-    """
-    if (type(pointA) != tuple) or (type(pointB) != tuple):
-        raise TypeError("Only tuples are supported as arguments")
-
-    lat1 = math.radians(pointA[0])
-    lat2 = math.radians(pointB[0])
-
-    diffLong = math.radians(pointB[1] - pointA[1])
-
-    x = math.sin(diffLong) * math.cos(lat2)
-    y = math.cos(lat1) * math.sin(lat2) - (math.sin(lat1)
-            * math.cos(lat2) * math.cos(diffLong))
-
-    initial_bearing = math.atan2(x, y)
-
-    # Now we have the initial bearing but math.atan2 return values
-    # from -180° to + 180° which is not what we want for a compass bearing
-    # The solution is to normalize the initial bearing as shown below
-    initial_bearing = math.degrees(initial_bearing)
-    compass_bearing = (initial_bearing + 360) % 360
-
-    return compass_bearing
 
 def calculate_true_wind_angle(heading, wind_degree):
     '''
@@ -179,7 +154,7 @@ def calculate_true_wind_angle(heading, wind_degree):
     return abs(result)
 
 def get_boat_speed(true_wind_angle, wind_speed):
-    df = pd.read_csv('./static/data/boat_polars/express37', header=0, sep=';')
+    df = pd.read_csv('./static/data/boat_polars/tp52', header=0, sep=';')
     df.set_index('twa/tws')
     # This selects the row of the correct wind angle
     polar_angle = df.iloc[abs(df['twa/tws'] - true_wind_angle).idxmin()]
@@ -187,29 +162,60 @@ def get_boat_speed(true_wind_angle, wind_speed):
     polar_speed = abs(polar_angle.values[1:] - wind_speed).argmin() + 1
     return polar_angle.iloc[polar_speed]
 
-class Node:
-    def __init__(self, lat, lng, time, parent):
-        self.lat = lat
-        self.lng = lng
-        self.time = datetime.timedelta(seconds=time).seconds
-        self.parent = parent
+def optimal_route(start, finish, max_steps=2):
+    os.chdir(netcdf_dir)
+    all_netcdfs = [file for file in glob.glob('*.nc')]
+    os.chdir('/home/richard/PycharmProjects/mweatherrouter')
+    ds = xarray.open_dataset(netcdf_dir + all_netcdfs[0])
+    start = Node(lat=start['lat'], lng=start['lng'] + 360, time=0, parent='Origin', heading=None)
+    isochrones = [[start]]
 
-class Isochrone_Router:
-    def __init__(self, start_lat, start_lng, finish_lat, finish_lng):
-        self.start_lat = start_lat
-        self.start_lng = start_lng
-        self.finish_lat = finish_lat
-        self.finish_lng = finish_lng
-
-def optimal_route(start_lat, start_lng, finish_lat, finish_lng):
-
-    exploration_degree = [deg for deg in range(-180, 190, 10)]
+    # Calculate all the potential positions the boat could be in one time step
+    for step in range(max_steps):
+        next_isochrone = []
+        for point in isochrones[-1]:
+            wind_speed = ds.sel(latitude=point.lat, longitude=point.lng, method='nearest')['speed'].values.item()
+            wind_degree = ds.sel(latitude=point.lat, longitude=point.lng, method='nearest')['degree'].values.item()
 
 
 
-    print(start_lat,start_lng,finish_lat,finish_lng)
+            # try all headings
+            if step == 0:
+                all_headings = [deg for deg in range(0, 361, 1)]
+            else:
+                azimuth1, azimuth2, distance = globe.inv(point.parent.lng, point.parent.lat, point.lng, point.lat)
+                all_headings = [azimuth1 - 359]
+            for heading in all_headings:
+                true_wind_angle = calculate_true_wind_angle(heading, wind_degree)
+                speed = get_boat_speed(true_wind_angle, wind_speed)
+                # Get the new location for traveling at speed for 1 hour. Polars are in nautical miles. fwd takes meters.
+                new_location = globe.fwd(lons=point.lng, lats=point.lat, az=heading, dist=speed * 1852)
+                new_node = Node(lat=new_location[1], lng=new_location[0], time=0, parent=point, heading=heading)
+                next_isochrone.append(new_node)
+        isochrones.append(next_isochrone)
+    return isochrones[-1]
 
+def found_goal(polygon, finish_point):
+    # https://automating-gis-processes.github.io/CSC18/lessons/L4/point-in-polygon.html
+    # Create Point objects
+    p1 = Point(24.952242, 60.1696017)
+    p2 = Point(24.976567, 60.1612500)
 
+    # Create a Polygon
+    coords = [(24.950899, 60.169158), (24.953492, 60.169158), (24.953510, 60.170104), (24.950958, 60.169990)]
+    poly = Polygon(coords)
 
-
-
+def deg2num(lat_deg, lon_deg, zoom=10):
+    '''
+    https://wiki.openstreetmap.org/wiki/Slippy_map_tilenames#Lon..2Flat._to_tile_numbers_7
+    http://tools.geofabrik.de/map/#10/
+    :param lat_deg: 
+    :param lon_deg: 
+    :param zoom: 
+    :return:
+    '''
+    lat_rad = math.radians(lat_deg)
+    n = 2.0 ** zoom
+    xtile = int((lon_deg + 180.0) / 360.0 * n)
+    ytile = int((1.0 - math.asinh(math.tan(lat_rad)) / math.pi) / 2.0 * n)
+    return (xtile, ytile)
