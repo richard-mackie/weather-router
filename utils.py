@@ -3,6 +3,8 @@ import glob, os, time, requests, xarray, datetime, math
 import pandas as pd
 from pyproj import Geod
 from shapely.geometry import Point, Polygon
+from scipy.ndimage.filters import gaussian_filter
+import heapq
 
 # Directory References
 netcdf_dir = './static/data/netcdf/'
@@ -115,9 +117,9 @@ def get_wind_speed_and_degree_for_routes(routes):
         # Need to convert the leaflet coordinate system back to gfs system
         # TODO create a single cordinate system
         start_lat = route[i]['lat']
-        start_lng = route[i]['lng'] + 360
+        start_lng = route[i]['lng']
         finish_lat = route[i + 1]['lat']
-        finish_lng = route[i + 1]['lng'] + 360
+        finish_lng = route[i + 1]['lng']
 
         # https://pyproj4.github.io/pyproj/stable/api/geod.html
         azimuth1, azimuth2, distance = globe.inv(start_lng, start_lat, finish_lng, finish_lat)
@@ -125,8 +127,8 @@ def get_wind_speed_and_degree_for_routes(routes):
         distance *= 0.000539957
         course_bearing = azimuth2 + 180
 
-        wind_speed = ds.sel(latitude=start_lat, longitude=start_lng, method='nearest')['speed'].values.item()
-        wind_degree = ds.sel(latitude=start_lat, longitude=start_lng, method='nearest')['degree'].values.item()
+        wind_speed = ds.sel(latitude=start_lat, longitude=start_lng + 360, method='nearest')['speed'].values.item()
+        wind_degree = ds.sel(latitude=start_lat, longitude=start_lng + 360, method='nearest')['degree'].values.item()
 
         true_wind_angle = calculate_true_wind_angle(course_bearing, wind_degree)
         boat_speed = get_boat_speed(true_wind_angle, wind_speed)
@@ -154,7 +156,7 @@ def calculate_true_wind_angle(heading, wind_degree):
     return abs(result)
 
 def get_boat_speed(true_wind_angle, wind_speed):
-    df = pd.read_csv('./static/data/boat_polars/tp52', header=0, sep=';')
+    df = pd.read_csv('./static/data/boat_polars/express37', header=0, sep=';')
     df.set_index('twa/tws')
     # This selects the row of the correct wind angle
     polar_angle = df.iloc[abs(df['twa/tws'] - true_wind_angle).idxmin()]
@@ -162,18 +164,17 @@ def get_boat_speed(true_wind_angle, wind_speed):
     polar_speed = abs(polar_angle.values[1:] - wind_speed).argmin() + 1
     return polar_angle.iloc[polar_speed]
 
-def optimal_route(start, finish, max_steps=3):
+def optimal_route(start, finish, max_steps=15):
     os.chdir(netcdf_dir)
     all_netcdfs = [file for file in glob.glob('*.nc')]
     os.chdir('/home/richard/PycharmProjects/mweatherrouter')
     ds = xarray.open_dataset(netcdf_dir + all_netcdfs[0])
-
-    start = Node(lat=start['lat'], lng=start['lng'] + 360, time=0, parent=None, heading=None)
-    isochrones = [[start]]
-    from astar import PriorityQueue
+    start = Node(lat=start['lat'], lng=start['lng'], time=0, parent=None, heading=None)
+    isochrone_nodes = [[start]]
+    isochrones_lats_lngs = []
 
     # Hours of travel for each step
-    hours_of_travel = 6
+    hours_of_travel = 1
 
     # Calculate all the potential positions the boat could be in one time step
     for step in range(max_steps):
@@ -181,20 +182,20 @@ def optimal_route(start, finish, max_steps=3):
         print('STEP:', step)
 
         # For every point in the last isochrone look for the children
-        for point in isochrones[-1]:
+        for point in isochrone_nodes[-1]:
             child_points = PriorityQueue()
-            wind_speed = ds.sel(latitude=point.lat, longitude=point.lng, method='nearest')['speed'].values.item()
-            wind_degree = ds.sel(latitude=point.lat, longitude=point.lng, method='nearest')['degree'].values.item()
+            wind_speed = ds.sel(latitude=point.lat, longitude=point.lng + 360, method='nearest')['speed'].values.item()
+            wind_degree = ds.sel(latitude=point.lat, longitude=point.lng + 360, method='nearest')['degree'].values.item()
 
             if step == 0:
-                headings = [deg for deg in range(0, 361, 5)]
+                headings = [deg for deg in range(0, 361, 1)]
                 for heading in headings:
                     true_wind_angle = calculate_true_wind_angle(heading, wind_degree)
                     speed = get_boat_speed(true_wind_angle, wind_speed)
                     travel_distance = speed * 1852 * hours_of_travel
                     # Get the new location for traveling at speed for 1 hour. Polars are in nautical miles. fwd takes meters.
                     new_location = globe.fwd(lons=point.lng, lats=point.lat, az=heading, dist=travel_distance)
-                    new_node = Node(lat=new_location[1], lng=new_location[0], time=0, parent=point, heading=heading)
+                    new_node = Node(lat=new_location[1], lng=new_location[0], time=0, parent=start, heading=heading)
                     next_isochrone.append(new_node)
 
             else:
@@ -212,23 +213,65 @@ def optimal_route(start, finish, max_steps=3):
                     child_points.push((-distance_to_origin, heading, new_node))
                     #print('point:', (distance, heading, new_node), 'start:', start.lng, start.lat, 'point:', point.lng, point.lat)
 
-                # Take the top two headings
+                # Take the top headings
                 next_isochrone.append(child_points.pop()[-1])
 
-        node_list = [point for point in next_isochrone]
+        node_list = [node for node in next_isochrone]
         node_list.sort(key=lambda x: x.heading)
-        isochrones.append(node_list)
+        isochrone_nodes.append(node_list)
 
-    lat_lngs = [[(node.lat, node.lng) for node in isochrone] for isochrone in isochrones]
-    return lat_lngs
+        polyline = smooth_to_contour(node_list)
+
+        if found_goal(polyline, finish_lat=finish['lat'], finish_lng=finish['lng']):
+            print('WE MADE IT!!!!!')
+            isochrones_lats_lngs.append(polyline)
+            return isochrones_lats_lngs
+
+        isochrones_lats_lngs.append(polyline)
+
+    return isochrones_lats_lngs
 
 
-def found_goal(polygon, finish_point):
+def found_goal(isochrone, finish_lng, finish_lat):
     # https://automating-gis-processes.github.io/CSC18/lessons/L4/point-in-polygon.html
     # Create Point objects
-    p1 = Point(24.952242, 60.1696017)
-    p2 = Point(24.976567, 60.1612500)
+    p1 = Point(finish_lat, finish_lng)
 
     # Create a Polygon
-    coords = [(24.950899, 60.169158), (24.953492, 60.169158), (24.953510, 60.170104), (24.950958, 60.169990)]
-    poly = Polygon(coords)
+    poly = Polygon(isochrone)
+    return p1.within(poly)
+
+def smooth_to_contour(isochrone):
+    lats = []
+    lngs = []
+    [(lats.append(node.lat), lngs.append(node.lng)) for node in isochrone]
+    lats1 = gaussian_filter(lats, sigma=7, mode=['wrap'])
+    lngs1 = gaussian_filter(lngs, sigma=7, mode=['wrap'])
+    latlngs = list(zip(lats1, lngs1))
+    return latlngs
+
+class PriorityQueue:
+    '''
+    Wrapper for heapq
+    '''
+
+    def __init__(self):
+        self.heap = []
+
+    def empty(self) -> bool:
+        # try to get lowest cost
+        try:
+            x = self.heap[0]
+            return False
+        # if there is no lowest cost element the priority queue is empty
+        except IndexError:
+            return True
+
+    def push(self, x):
+        heapq.heappush(self.heap, x)
+
+    def pop(self):
+        return heapq.heappop(self.heap)
+
+
+

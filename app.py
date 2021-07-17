@@ -27,6 +27,9 @@ def process():
 def router():
     routes = request.get_json()
     start = routes[0][0]
+    print(start['lng'])
+    #start['lng'] -= 360
+    #print(start['lng'])
     finish = routes[0][-1]
     optimal_route = utils.optimal_route(start, finish)
     res = make_response(jsonify(optimal_route), 200)

@@ -186,7 +186,7 @@ function show_users_time(time){
 function plot_isochrone(latlngs){
     console.log(latlngs)
     latlngs.forEach(function(line){
-        var polyline = L.polyline(line, {color: 'red', weight: 1}).addTo(map);
+        var polyline = L.polyline(line, {color: 'red', weight: 1, noClip: true, smoothFactor: 1}).addTo(map);
     });
 }
 
