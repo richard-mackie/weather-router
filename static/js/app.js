@@ -181,13 +181,13 @@ function doStuff() {
 
 function show_users_time(time){
     alert('Your route took ' + JSON.stringify(time['time']))
-    return false
 }
 
 function plot_isochrone(latlngs){
     console.log(latlngs)
-    var polyline = L.polyline(latlngs, {color: 'red', weight: 1}).addTo(map);
-    return false
+    latlngs.forEach(function(line){
+        var polyline = L.polyline(line, {color: 'red', weight: 1}).addTo(map);
+    });
 }
 
 //;

@@ -29,8 +29,7 @@ def router():
     start = routes[0][0]
     finish = routes[0][-1]
     optimal_route = utils.optimal_route(start, finish)
-    lat_lngs = [(point.lat, point.lng) for point in optimal_route]
-    res = make_response(jsonify(lat_lngs), 200)
+    res = make_response(jsonify(optimal_route), 200)
     return res
 
 if __name__ == '__main__':

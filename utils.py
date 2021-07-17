@@ -162,38 +162,59 @@ def get_boat_speed(true_wind_angle, wind_speed):
     polar_speed = abs(polar_angle.values[1:] - wind_speed).argmin() + 1
     return polar_angle.iloc[polar_speed]
 
-def optimal_route(start, finish, max_steps=1):
+def optimal_route(start, finish, max_steps=20):
     os.chdir(netcdf_dir)
     all_netcdfs = [file for file in glob.glob('*.nc')]
     os.chdir('/home/richard/PycharmProjects/mweatherrouter')
     ds = xarray.open_dataset(netcdf_dir + all_netcdfs[0])
-    start = Node(lat=start['lat'], lng=start['lng'] + 360, time=0, parent='Origin', heading=None)
+
+    start = Node(lat=start['lat'], lng=start['lng'] + 360, time=0, parent=None, heading=None)
     isochrones = [[start]]
+    from astar import PriorityQueue
 
     # Calculate all the potential positions the boat could be in one time step
     for step in range(max_steps):
         next_isochrone = []
+        print('STEP:', step)
+
+        # For every point in the last isochrone look for the children
         for point in isochrones[-1]:
+            child_points = PriorityQueue()
             wind_speed = ds.sel(latitude=point.lat, longitude=point.lng, method='nearest')['speed'].values.item()
             wind_degree = ds.sel(latitude=point.lat, longitude=point.lng, method='nearest')['degree'].values.item()
 
-
-
-            # try all headings
             if step == 0:
-                all_headings = [deg for deg in range(0, 361, 1)]
+                headings = [deg for deg in range(0, 361, 10)]
+                for heading in headings:
+                    true_wind_angle = calculate_true_wind_angle(heading, wind_degree)
+                    speed = get_boat_speed(true_wind_angle, wind_speed)
+                    # Get the new location for traveling at speed for 1 hour. Polars are in nautical miles. fwd takes meters.
+                    new_location = globe.fwd(lons=point.lng, lats=point.lat, az=heading, dist=speed * 1852)
+                    new_node = Node(lat=new_location[1], lng=new_location[0], time=0, parent=point, heading=heading)
+                    next_isochrone.append(new_node)
+
             else:
-                azimuth1, azimuth2, distance = globe.inv(point.parent.lng, point.parent.lat, point.lng, point.lat)
-                all_headings = [azimuth1 - 360]
-            for heading in all_headings:
-                true_wind_angle = calculate_true_wind_angle(heading, wind_degree)
-                speed = get_boat_speed(true_wind_angle, wind_speed)
-                # Get the new location for traveling at speed for 1 hour. Polars are in nautical miles. fwd takes meters.
-                new_location = globe.fwd(lons=point.lng, lats=point.lat, az=heading, dist=speed * 1852)
-                new_node = Node(lat=new_location[1], lng=new_location[0], time=0, parent=point, heading=heading)
-                next_isochrone.append(new_node)
-        isochrones.append(next_isochrone)
-    return isochrones[-1]
+                headings = [deg + point.heading for deg in range(-5, 6, 1)]
+                #print(point.heading, headings)
+                for heading in headings:
+                    true_wind_angle = calculate_true_wind_angle(heading, wind_degree)
+                    speed = get_boat_speed(true_wind_angle, wind_speed)
+                    # Get the new location for traveling at speed for 1 hour. Polars are in nautical miles. fwd takes meters.
+                    distance = speed * 1852
+                    new_lon, new_lat, bew_back_azimuth = globe.fwd(lons=point.lng, lats=point.lat, az=heading, dist=distance)
+                    new_node = Node(lat=new_lat, lng=new_lon, time=0, parent=point, heading=heading)
+                    child_points.push((-distance, heading, new_node))
+                    #print('point:', (distance, heading, new_node), 'start:', start.lng, start.lat, 'point:', point.lng, point.lat)
+
+                # Take the top headings
+                next_isochrone.append(child_points.pop()[-1])
+
+        node_list = [point for point in next_isochrone]
+        isochrones.append(node_list)
+
+    lat_lngs = [[(node.lat, node.lng) for node in isochrone] for isochrone in isochrones]
+
+    return lat_lngs
 
 def found_goal(polygon, finish_point):
     # https://automating-gis-processes.github.io/CSC18/lessons/L4/point-in-polygon.html
@@ -204,18 +225,3 @@ def found_goal(polygon, finish_point):
     # Create a Polygon
     coords = [(24.950899, 60.169158), (24.953492, 60.169158), (24.953510, 60.170104), (24.950958, 60.169990)]
     poly = Polygon(coords)
-
-def deg2num(lat_deg, lon_deg, zoom=10):
-    '''
-    https://wiki.openstreetmap.org/wiki/Slippy_map_tilenames#Lon..2Flat._to_tile_numbers_7
-    http://tools.geofabrik.de/map/#10/
-    :param lat_deg: 
-    :param lon_deg: 
-    :param zoom: 
-    :return:
-    '''
-    lat_rad = math.radians(lat_deg)
-    n = 2.0 ** zoom
-    xtile = int((lon_deg + 180.0) / 360.0 * n)
-    ytile = int((1.0 - math.asinh(math.tan(lat_rad)) / math.pi) / 2.0 * n)
-    return (xtile, ytile)
