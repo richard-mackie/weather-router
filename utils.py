@@ -162,7 +162,7 @@ def get_boat_speed(true_wind_angle, wind_speed):
     polar_speed = abs(polar_angle.values[1:] - wind_speed).argmin() + 1
     return polar_angle.iloc[polar_speed]
 
-def optimal_route(start, finish, max_steps=20):
+def optimal_route(start, finish, max_steps=3):
     os.chdir(netcdf_dir)
     all_netcdfs = [file for file in glob.glob('*.nc')]
     os.chdir('/home/richard/PycharmProjects/mweatherrouter')
@@ -171,6 +171,9 @@ def optimal_route(start, finish, max_steps=20):
     start = Node(lat=start['lat'], lng=start['lng'] + 360, time=0, parent=None, heading=None)
     isochrones = [[start]]
     from astar import PriorityQueue
+
+    # Hours of travel for each step
+    hours_of_travel = 6
 
     # Calculate all the potential positions the boat could be in one time step
     for step in range(max_steps):
@@ -184,37 +187,41 @@ def optimal_route(start, finish, max_steps=20):
             wind_degree = ds.sel(latitude=point.lat, longitude=point.lng, method='nearest')['degree'].values.item()
 
             if step == 0:
-                headings = [deg for deg in range(0, 361, 10)]
+                headings = [deg for deg in range(0, 361, 5)]
                 for heading in headings:
                     true_wind_angle = calculate_true_wind_angle(heading, wind_degree)
                     speed = get_boat_speed(true_wind_angle, wind_speed)
+                    travel_distance = speed * 1852 * hours_of_travel
                     # Get the new location for traveling at speed for 1 hour. Polars are in nautical miles. fwd takes meters.
-                    new_location = globe.fwd(lons=point.lng, lats=point.lat, az=heading, dist=speed * 1852)
+                    new_location = globe.fwd(lons=point.lng, lats=point.lat, az=heading, dist=travel_distance)
                     new_node = Node(lat=new_location[1], lng=new_location[0], time=0, parent=point, heading=heading)
                     next_isochrone.append(new_node)
 
             else:
-                headings = [deg + point.heading for deg in range(-5, 6, 1)]
+                headings = [deg + point.heading for deg in range(-45, 46, 10)]
                 #print(point.heading, headings)
                 for heading in headings:
                     true_wind_angle = calculate_true_wind_angle(heading, wind_degree)
                     speed = get_boat_speed(true_wind_angle, wind_speed)
                     # Get the new location for traveling at speed for 1 hour. Polars are in nautical miles. fwd takes meters.
-                    distance = speed * 1852
-                    new_lon, new_lat, bew_back_azimuth = globe.fwd(lons=point.lng, lats=point.lat, az=heading, dist=distance)
+                    travel_distance = speed * 1852 * hours_of_travel
+                    new_lon, new_lat, bew_back_azimuth = globe.fwd(lons=point.lng, lats=point.lat, az=heading, dist=travel_distance)
                     new_node = Node(lat=new_lat, lng=new_lon, time=0, parent=point, heading=heading)
-                    child_points.push((-distance, heading, new_node))
+                    # Rank the children by how far away they go from the origin
+                    azimuth1, azimuth2, distance_to_origin = globe.inv(lats1=start.lat, lons1=start.lng, lats2=new_node.lat, lons2=new_node.lng)
+                    child_points.push((-distance_to_origin, heading, new_node))
                     #print('point:', (distance, heading, new_node), 'start:', start.lng, start.lat, 'point:', point.lng, point.lat)
 
-                # Take the top headings
+                # Take the top two headings
                 next_isochrone.append(child_points.pop()[-1])
 
         node_list = [point for point in next_isochrone]
+        node_list.sort(key=lambda x: x.heading)
         isochrones.append(node_list)
 
     lat_lngs = [[(node.lat, node.lng) for node in isochrone] for isochrone in isochrones]
-
     return lat_lngs
+
 
 def found_goal(polygon, finish_point):
     # https://automating-gis-processes.github.io/CSC18/lessons/L4/point-in-polygon.html
