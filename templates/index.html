@@ -18,10 +18,15 @@
     <script type=text/javascript src="{{url_for('static', filename='./js/plugins/Leaflet.windbarb/src/leaflet-windbarb.js')}}"></script>
     <script type=text/javascript src="{{url_for('static', filename='./js/plugins/Leaflet.PolylineMeasure/Leaflet.PolylineMeasure.js')}}"></script>
     <script src="https://cdn.jsdelivr.net/npm/leaflet-easybutton@2/src/easy-button.js"></script>
+
+    <script>
+        let maxBounds = L.latLngBounds({{ extents|tojson }});
+        let wind = {{data|tojson}};
+    </script>
+
     <script type=text/javascript src="{{url_for('static', filename='./js/app.js')}}"></script>
 
     <script>
-        var wind={{data|tojson}};
         plotWindBarbs(wind);
     </script>
 

@@ -1,5 +1,6 @@
 from flask import Flask, url_for, render_template, jsonify, request, redirect, make_response
 import utils, json
+from config import Config
 
 app = Flask(__name__)
 
@@ -12,7 +13,7 @@ jsons = utils.get_jsons()
 @app.route('/', methods = ['GET'])
 def index():
     file = open(json_directory + jsons[0], 'r')
-    return render_template('index.html', data=json.load(file))
+    return render_template('index.html', data=json.load(file), extents=Config.extents)
 
 @app.route('/process_user_route', methods=['GET','POST'])
 def process():

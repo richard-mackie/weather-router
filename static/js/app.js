@@ -3,7 +3,11 @@ var openStreetsMap = L.tileLayer('http://{s}.tile.openstreetmap.org/{z}/{x}/{y}.
     attribution: '&copy; ' + '<a href="http://openstreetmap.org">OpenStreetMap</a>' + ' Contributors',
     });
 
-var maxBounds = L.latLngBounds({ lat: 52.56928286558243, lng: -95.88867187500001 }, { lat: 17.26672782352052, lng: -177.09960937500003 })
+//var maxBounds = L.latLngBounds({ lat: 52.56928286558243, lng: -95.88867187500001 }, { lat: 17.26672782352052, lng: -177.09960937500003 })
+
+function getBounds(bounds){
+    return bounds
+}
 
 var map = L.map('map',{
     worldCopyJump: true,
@@ -83,10 +87,10 @@ L.easyButton('<img src="./static/images/check-square.svg">', function() {
 //Takes wind data in the form of a json and plots windbarbs with a speed and direction on the map
 function plotWindBarbs(winddata){
     wind.data.forEach(function(p){
-    if (maxBounds.contains([p.latitude, p.longitude - 360])){
+    if (maxBounds.contains([p.latitude, p.longitude])){
         // need to take - 360 of longitude due to noaa grib generation
         var icon = L.WindBarb.icon({deg: p.degree, speed: p.speed, pointRadius: 0, forceDir: false, strokeLength: 17, strokeWidth: 1});
-        var marker = L.marker([p.latitude, p.longitude - 360], {icon: icon}).addTo(map);
+        var marker = L.marker([p.latitude, p.longitude], {icon: icon}).addTo(map);
     }
     });
 }

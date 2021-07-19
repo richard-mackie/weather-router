@@ -5,6 +5,7 @@ from pyproj import Geod
 from shapely.geometry import Point, Polygon
 from scipy.ndimage.filters import gaussian_filter
 import heapq
+from config import Config
 
 # Directory References
 netcdf_dir = './static/data/netcdf/'
@@ -13,6 +14,24 @@ json_dir = './static/data/json/'
 
 # Used for geodesic calculations
 globe = Geod(ellps='clrk66')  # Use Clarke 1866 ellipsoid.
+
+# Create the boat polar diagram
+boat_polar_df = pd.read_csv('./static/data/boat_polars/express37b', header=0, sep=';')
+boat_polar_df.set_index('twa/tws')
+
+polar_diagram = np.genfromtxt('./static/data/boat_polars/express37b', delimiter=';')
+# replace the nans with - inf
+polar_diagram = np.nan_to_num(polar_diagram, nan=-np.inf)
+# sort according to the first comuln, wind angle
+polar_diagram = polar_diagram[np.argsort(polar_diagram[:, 0])]
+
+def get_boat_speed_numpy(true_wind_angle, wind_speed, np_polars=polar_diagram):
+    # get the wind degree column
+    degree = np_polars[:,0]
+    # subract the wind angle so we can sort to the the closest .1 errs on the side of the a wider angle
+    row_index = np.argmin(abs(degree - true_wind_angle - .1))
+    col_index = np.argmin(abs(np_polars[0] - wind_speed))
+    return np_polars[row_index][col_index]
 
 class Node:
     def __init__(self, lat, lng, time, parent, heading):
@@ -32,7 +51,19 @@ def create_wind_spd_deg_jsons_from_all_gribs(input_dir=grib_dir, output_dir=json
     else:
         for filename in all_gribs:
             ds = xarray.open_dataset(input_dir + filename, engine='cfgrib')
+            # convert the 0-360 to -180 + 180
+            ds = ds.assign_coords(longitude=(((ds.longitude + 180) % 360) - 180))
+            # Need to do this for the wind speed lookup later
+            ds = ds.sortby('longitude')
             # TODO drop areas outside of map
+            extents = Config.extents
+            max_extents = extents[0]
+            min_extents = extents[1]
+            print(max_extents, min_extents)
+            ds = ds.where((ds.latitude >= min_extents['lat'])
+                          & (ds.latitude <= max_extents['lat'])
+                          & (ds.longitude >= min_extents['lng'])
+                          & (ds.longitude <= max_extents['lng']), drop=True)
             ds = ds.assign(speed=np.sqrt(np.square(ds['u10']) + np.square(ds['v10'])))
             #ds = ds.where((ds.latitude >= 25.5) & (ds.latitude <= 26), drop=True)
             # https://www.eol.ucar.edu/content/wind-direction-quick-reference
@@ -66,10 +97,11 @@ def get_gribs(degrees=1, left_lon=0, right_lon=360, top_lat=90, bottom_lat=-90, 
         url = 'https://nomads.ncep.noaa.gov/cgi-bin/filter_gfs_{}.pl?file=gfs.t00z.pgrb2.1p00.f{}' \
               '&lev_10_m_above_ground=on&var_UGRD=on&var_VGRD=on&leftlon={}&rightlon={}&toplat={}&bottomlat={}&dir=%2Fgfs.{}%2F00%2Fatmos'.format(DEG[degrees], FFF[i], left_lon, right_lon, top_lat, bottom_lat, YYYYMMDD)
         file_name = YYYYMMDD + '.' + DEG[degrees] + '.' + FFF[i] + '.grib2'
+        print(url)
         r = requests.get(url, allow_redirects=True)
         open(grib_dir + file_name, 'wb').write(r.content)
         # Do not upset NOAA servers
-        time.sleep(1)
+        time.sleep(2)
     print(flush=True)
 
 def slice_lat_lon(ds):
@@ -127,8 +159,8 @@ def get_wind_speed_and_degree_for_routes(routes):
         distance *= 0.000539957
         course_bearing = azimuth2 + 180
 
-        wind_speed = ds.sel(latitude=start_lat, longitude=start_lng + 360, method='nearest')['speed'].values.item()
-        wind_degree = ds.sel(latitude=start_lat, longitude=start_lng + 360, method='nearest')['degree'].values.item()
+        wind_speed = ds.sel(latitude=start_lat, longitude=start_lng, method='nearest')['speed'].values.item()
+        wind_degree = ds.sel(latitude=start_lat, longitude=start_lng, method='nearest')['degree'].values.item()
 
         true_wind_angle = calculate_true_wind_angle(course_bearing, wind_degree)
         boat_speed = get_boat_speed(true_wind_angle, wind_speed)
@@ -155,16 +187,14 @@ def calculate_true_wind_angle(heading, wind_degree):
         result += 360
     return abs(result)
 
-def get_boat_speed(true_wind_angle, wind_speed):
-    df = pd.read_csv('./static/data/boat_polars/express37', header=0, sep=';')
-    df.set_index('twa/tws')
+def get_boat_speed(true_wind_angle, wind_speed, df=boat_polar_df):
     # This selects the row of the correct wind angle
     polar_angle = df.iloc[abs(df['twa/tws'] - true_wind_angle).idxmin()]
     # This selects the correct wind speed in the chosen row, +1 is to offset the index column
     polar_speed = abs(polar_angle.values[1:] - wind_speed).argmin() + 1
     return polar_angle.iloc[polar_speed]
 
-def optimal_route(start, finish, max_steps=15):
+def optimal_route(start, finish, max_steps=60):
     os.chdir(netcdf_dir)
     all_netcdfs = [file for file in glob.glob('*.nc')]
     os.chdir('/home/richard/PycharmProjects/mweatherrouter')
@@ -184,8 +214,8 @@ def optimal_route(start, finish, max_steps=15):
         # For every point in the last isochrone look for the children
         for point in isochrone_nodes[-1]:
             child_points = PriorityQueue()
-            wind_speed = ds.sel(latitude=point.lat, longitude=point.lng + 360, method='nearest')['speed'].values.item()
-            wind_degree = ds.sel(latitude=point.lat, longitude=point.lng + 360, method='nearest')['degree'].values.item()
+            wind_speed = ds.sel(latitude=point.lat, longitude=point.lng, method='nearest')['speed'].values.item()
+            wind_degree = ds.sel(latitude=point.lat, longitude=point.lng, method='nearest')['degree'].values.item()
 
             if step == 0:
                 headings = [deg for deg in range(0, 361, 1)]
@@ -236,7 +266,6 @@ def found_goal(isochrone, finish_lng, finish_lat):
     # https://automating-gis-processes.github.io/CSC18/lessons/L4/point-in-polygon.html
     # Create Point objects
     p1 = Point(finish_lat, finish_lng)
-
     # Create a Polygon
     poly = Polygon(isochrone)
     return p1.within(poly)
