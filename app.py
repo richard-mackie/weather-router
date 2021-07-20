@@ -19,8 +19,7 @@ def index():
 def process():
     routes = request.get_json()
     time = utils.get_wind_speed_and_degree_for_routes(routes=routes)
-    string_time = '{} days {} hours {} minutes'.format(time.days, time.seconds//3600, (time.seconds//60)%60)
-    print(string_time)
+    string_time = '{} days {} hours {} minutes'.format(time.days, time.seconds//3600, (time.seconds//60) % 60)
     res = make_response(jsonify({'time':string_time}), 200)
     return res
 
@@ -28,9 +27,6 @@ def process():
 def router():
     routes = request.get_json()
     start = routes[0][0]
-    print(start['lng'])
-    #start['lng'] -= 360
-    #print(start['lng'])
     finish = routes[0][-1]
     optimal_route = utils.optimal_route(start, finish)
     res = make_response(jsonify(optimal_route), 200)
