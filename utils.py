@@ -19,23 +19,17 @@ proj_dir = '/home/richard/PycharmProjects/mweatherrouter'
 # Used for geodesic calculations
 globe = Geod(ellps='clrk66')  # Use Clarke 1866 ellipsoid.
 
-# Create the boat polar diagram
+# Create the boat polar diagram for get_boat_speed function
 boat_polar_df = pd.read_csv('./static/data/boat_polars/express37b', header=0, sep=';')
 boat_polar_df.set_index('twa/tws')
 
+# Create the boat polar diagram for get_boat_speed_numpy function
 polar_diagram = np.genfromtxt('./static/data/boat_polars/express37b', delimiter=';')
 # replace the nans with - inf
 polar_diagram = np.nan_to_num(polar_diagram, nan=-np.inf)
 # sort according to the first comuln, wind angle
 polar_diagram = polar_diagram[np.argsort(polar_diagram[:, 0])]
 
-def get_boat_speed_numpy(true_wind_angle, wind_speed, np_polars=polar_diagram):
-    # get the wind degree column
-    degree = np_polars[:,0]
-    # subract the wind angle so we can sort to the the closest .1 errs on the side of the a wider angle
-    row_index = np.argmin(abs(degree - true_wind_angle - .1))
-    col_index = np.argmin(abs(np_polars[0] - wind_speed))
-    return np_polars[row_index][col_index]
 
 class Node:
     def __init__(self, lat, lng, time, parent, heading):
@@ -44,6 +38,31 @@ class Node:
         self.time = datetime.timedelta(seconds=time).seconds
         self.parent = parent
         self.heading = heading
+
+
+class PriorityQueue:
+    '''
+    Wrapper for heapq
+    '''
+
+    def __init__(self):
+        self.heap = []
+
+    def empty(self) -> bool:
+        # try to get lowest cost
+        try:
+            x = self.heap[0]
+            return False
+        # if there is no lowest cost element the priority queue is empty
+        except IndexError:
+            return True
+
+    def push(self, x):
+        heapq.heappush(self.heap, x)
+
+    def pop(self):
+        return heapq.heappop(self.heap)
+
 
 def create_wind_spd_deg_jsons_from_all_gribs(input_dir=grib_dir, output_dir=json_dir, verbose=False):
     '''Takes a grib file and converts to a json file'''
@@ -77,6 +96,7 @@ def create_wind_spd_deg_jsons_from_all_gribs(input_dir=grib_dir, output_dir=json
             with open(output_dir + filename.replace('grib2', 'json'), 'w') as outfile:
                 outfile.write(pandas_result)
 
+
 def get_gribs(degrees=1, left_lon=0, right_lon=360, top_lat=90, bottom_lat=-90, YYYYMMDD=''):
     '''
     Gets u-10 and v-10 wind grib data from NOAA. https://www.nco.ncep.noaa.gov/pmb/products/gfs/
@@ -104,10 +124,12 @@ def get_gribs(degrees=1, left_lon=0, right_lon=360, top_lat=90, bottom_lat=-90, 
         time.sleep(2)
     print(flush=True)
 
+
 def slice_lat_lon(ds):
     '''Used for preprocessing to reduce the size of the datasets before merging'''
     ds = ds.drop('time')
     return ds.isel(latitude=slice(0, 3), longitude=slice(0, 3))
+
 
 def get_jsons():
     '''
@@ -134,6 +156,24 @@ def get_jsons():
         jsons.sort()
         os.chdir(proj_dir)
     return jsons
+
+
+def get_boat_speed_numpy(true_wind_angle, wind_speed, np_polars=polar_diagram):
+    # get the wind degree column
+    degree = np_polars[:,0]
+    # subract the wind angle so we can sort to the the closest .1 errs on the side of the a wider angle
+    row_index = np.argmin(abs(degree - true_wind_angle - .1))
+    col_index = np.argmin(abs(np_polars[0] - wind_speed))
+    return np_polars[row_index][col_index]
+
+
+def get_boat_speed(true_wind_angle, wind_speed, df=boat_polar_df):
+    # This selects the row of the correct wind angle
+    polar_angle = df.iloc[abs(df['twa/tws'] - true_wind_angle).idxmin()]
+    # This selects the correct wind speed in the chosen row, +1 is to offset the index column
+    polar_speed = abs(polar_angle.values[1:] - wind_speed).argmin() + 1
+    return polar_angle.iloc[polar_speed]
+
 
 def get_wind_speed_and_degree_for_routes(routes):
     os.chdir(netcdf_dir)
@@ -174,6 +214,7 @@ def get_wind_speed_and_degree_for_routes(routes):
         start_time = time
     return route_segments[-1]['time']
 
+
 def calculate_true_wind_angle(heading, wind_degree):
     '''
     :param heading: This is the course the route is define by
@@ -188,20 +229,12 @@ def calculate_true_wind_angle(heading, wind_degree):
     return abs(result)
 
 
-def get_boat_speed(true_wind_angle, wind_speed, df=boat_polar_df):
-    # This selects the row of the correct wind angle
-    polar_angle = df.iloc[abs(df['twa/tws'] - true_wind_angle).idxmin()]
-    # This selects the correct wind speed in the chosen row, +1 is to offset the index column
-    polar_speed = abs(polar_angle.values[1:] - wind_speed).argmin() + 1
-    return polar_angle.iloc[polar_speed]
-
-
 def optimal_route(start, finish, max_steps=1):
     os.chdir(netcdf_dir)
     all_netcdfs = [file for file in glob.glob('*.nc')]
     os.chdir(proj_dir)
     ds = xarray.open_dataset(netcdf_dir + all_netcdfs[0])
-    print(start)
+
     start = Node(lat=start['lat'], lng=start['lng'], time=0, parent=None, heading=None)
     isochrone_nodes = [[start]]
     isochrones_lats_lngs = []
@@ -221,7 +254,7 @@ def optimal_route(start, finish, max_steps=1):
             wind_degree = ds.sel(latitude=point.lat, longitude=point.lng, method='nearest')['degree'].values.item()
 
             if step == 0:
-                headings = [deg for deg in range(0, 361, 10)]
+                headings = [deg for deg in range(0, 361, 5)]
                 for heading in headings:
                     true_wind_angle = calculate_true_wind_angle(heading, wind_degree)
                     speed = get_boat_speed_numpy(true_wind_angle, wind_speed)
@@ -236,7 +269,7 @@ def optimal_route(start, finish, max_steps=1):
                 #print(point.heading, headings)
                 for heading in headings:
                     true_wind_angle = calculate_true_wind_angle(heading, wind_degree)
-                    speed = get_boat_speed_numpy(true_wind_angle, wind_speed)
+                    speed = get_boat_speed(true_wind_angle, wind_speed)
                     # Get the new location for traveling at speed for 1 hour. Polars are in nautical miles. fwd takes meters.
                     travel_distance = speed * 1852 * hours_of_travel
                     new_lon, new_lat, bew_back_azimuth = globe.fwd(lons=point.lng, lats=point.lat, az=heading, dist=travel_distance)
@@ -264,46 +297,6 @@ def optimal_route(start, finish, max_steps=1):
     return isochrones_lats_lngs
 
 
-def optimal_route_numpy(start, finish, max_steps=1):
-    os.chdir(netcdf_dir)
-    all_netcdfs = [file for file in glob.glob('*.nc')]
-    os.chdir(proj_dir)
-    ds = xarray.open_dataset(netcdf_dir + all_netcdfs[0])
-
-    # Course Degrees, Lat, Lon, True Wind Angle, Boat Speed, Distance to Start
-    isochrone_abstract = np.array([[0, 0, 0, 0, 0, 0] for deg in range(0, 361, 10)], dtype=float)
-
-    # Hold all of the isochrones
-    isochrones = []
-    isochrones_lats_lngs = []
-    #isochrones.append([np.array([[0, start['lat'], start['lng'], 0, 0, 0]], dtype=float)])
-
-    # Calculate all the potential positions the boat could be in one time step
-    for step in range(max_steps):
-        next_isochrone = copy.deepcopy(isochrone_abstract)
-        next_isochrone_lat_lng = []
-
-        if step == 0:
-            # Course Degrees, Lat, Lon, True Wind Angle, Boat Speed, Distance to Start
-            current_isochrone = np.asarray([[deg, start['lat'], start['lng'], 0, 0, 0] for deg in range(0, 361, 10)], dtype=float)
-            # Don't explore, just go in all 360
-            for i in range(len(next_isochrone)):
-                # print(current_isochrone[i, :])
-                child_point = get_best_n_children(start, exploration_angle=30, exploration_degree_step=1, parent=current_isochrone[i, :])
-                next_isochrone[i, :] = child_point
-                next_isochrone_lat_lng.append((child_point[1], child_point[2]))
-        else:
-            current_isochrone = isochrones[-1]
-
-
-        isochrones.append(next_isochrone)
-        isochrones_lats_lngs.append(list(next_isochrone_lat_lng))
-
-    print(isochrones)
-
-    return isochrones_lats_lngs
-
-
 def found_goal(isochrone, finish_lng, finish_lat):
     # https://automating-gis-processes.github.io/CSC18/lessons/L4/point-in-polygon.html
     # Create Point objects
@@ -323,28 +316,38 @@ def smooth_to_contour(isochrone):
     return latlngs
 
 
-class PriorityQueue:
-    '''
-    Wrapper for heapq
-    '''
+# These functions were for a rewrite to speed up the Optimal Route Solver
 
-    def __init__(self):
-        self.heap = []
+def optimal_route_numpy(start, finish, max_steps=1):
+    os.chdir(netcdf_dir)
+    all_netcdfs = [file for file in glob.glob('*.nc')]
+    os.chdir(proj_dir)
+    ds = xarray.open_dataset(netcdf_dir + all_netcdfs[0])
 
-    def empty(self) -> bool:
-        # try to get lowest cost
-        try:
-            x = self.heap[0]
-            return False
-        # if there is no lowest cost element the priority queue is empty
-        except IndexError:
-            return True
+    # Course Degrees, Lat, Lon, True Wind Angle, Boat Speed, Distance to Start
+    isochrone_abstract = np.array([[0, 0, 0, 0, 0, 0] for deg in range(0, 361, 5)], dtype=float)
 
-    def push(self, x):
-        heapq.heappush(self.heap, x)
+    # Hold all of the isochrones
+    isochrones = []
+    isochrones_lats_lngs = []
 
-    def pop(self):
-        return heapq.heappop(self.heap)
+    # Calculate all the potential positions the boat could be in one time step
+    for step in range(max_steps):
+        next_isochrone = copy.deepcopy(isochrone_abstract)
+        next_isochrone_lat_lng = []
+        if step == 0:
+            current_isochrone = np.asarray([[deg, start['lat'], start['lng'], 0, 0, 0] for deg in range(0, 361, 5)], dtype=float)
+            for i in range(len(current_isochrone)):
+                child_point = get_best_n_children(ds, start, parent=current_isochrone[i, :], exploration_angle=2, exploration_degree_step=1)
+                next_isochrone[i, :] = child_point
+                next_isochrone_lat_lng.append((child_point[1], child_point[2]))
+        else:
+            current_isochrone = isochrones[-1]
+
+        isochrones.append(next_isochrone)
+        isochrones_lats_lngs.append(list(next_isochrone_lat_lng))
+
+    return isochrones_lats_lngs
 
 
 def get_boat_speed_numpy_array(wind_speed, point, np_polars=polar_diagram):
@@ -362,7 +365,7 @@ def get_boat_speed_numpy_array(wind_speed, point, np_polars=polar_diagram):
     point[:,4] = np_polars[row_index, col_index]
 
 
-def get_best_n_children(start, parent, exploration_angle=45, exploration_degree_step=10):
+def get_best_n_children(ds, start, parent, exploration_angle=45, exploration_degree_step=10):
     '''
     Returns the child that travels the furthest from the starting point.
     :param start: starting coordinates in dictionary format {'lat': 23, 'lng': -150}
@@ -374,20 +377,17 @@ def get_best_n_children(start, parent, exploration_angle=45, exploration_degree_
     :param n: number of children to return. Not currently being used.
     :return:
     '''
-    # Open the grib data for wind speed and direction
-    os.chdir(netcdf_dir)
-    all_netcdfs = [file for file in glob.glob('*.nc')]
-    os.chdir(proj_dir)
-    ds = xarray.open_dataset(netcdf_dir + all_netcdfs[0])
-
     if exploration_angle == 0:
-        child = np.array([[parent[0], 0, 0, 0, 0, 0]],dtype=float)
+        child = np.array([[0, 0, 0, 0, 0, 0]],dtype=float)
+
     else:
         child = np.array([[deg, 0, 0, 0, 0, 0] for deg in range(-exploration_angle, exploration_angle + 1, exploration_degree_step)], dtype=float)
     parent = np.broadcast_to(parent, shape=child.shape)
 
     # explore the course heading relative to the parent
     child[:, 0] += parent[:, 0]
+
+    print('CHILD', child)
 
     # Get the wind speed and direction at the parent point
     wind_speed = ds.sel(latitude=parent[0, 1], longitude=parent[0, 2], method='nearest')['speed'].values.item()
@@ -416,11 +416,11 @@ def get_best_n_children(start, parent, exploration_angle=45, exploration_degree_
 
     return child[index_of_max_distance_point]
 
+
 # Course Degrees, Lat, Lon, True Wind Angle, Boat Speed, Distance to Start
 #point = np.array([180, 17, -144, 45, 0, 0], dtype=float)
-start = {'lat': 23, 'lng': -150}
-
+#start = {'lat': 23, 'lng': -150}
 
 #print(get_best_n_children(start, point))
-x = optimal_route_numpy(start, start, 1)
+#x = optimal_route_numpy(start, start, 1)
 #print(x)
