@@ -28,7 +28,7 @@ def router():
     routes = request.get_json()
     start = routes[0][0]
     finish = routes[0][-1]
-    optimal_route = utils.optimal_route(start, finish, max_steps=200)
+    optimal_route = utils.optimal_route_smoothed(start, finish, max_steps=1)
     res = make_response(jsonify(optimal_route), 200)
     return res
 
