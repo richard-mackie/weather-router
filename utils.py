@@ -187,6 +187,7 @@ def calculate_true_wind_angle(heading, wind_degree):
         result += 360
     return abs(result)
 
+
 def get_boat_speed(true_wind_angle, wind_speed, df=boat_polar_df):
     # This selects the row of the correct wind angle
     polar_angle = df.iloc[abs(df['twa/tws'] - true_wind_angle).idxmin()]
@@ -194,7 +195,8 @@ def get_boat_speed(true_wind_angle, wind_speed, df=boat_polar_df):
     polar_speed = abs(polar_angle.values[1:] - wind_speed).argmin() + 1
     return polar_angle.iloc[polar_speed]
 
-def optimal_route(start, finish, max_steps=60):
+
+def optimal_route(start, finish, max_steps=1):
     os.chdir(netcdf_dir)
     all_netcdfs = [file for file in glob.glob('*.nc')]
     os.chdir(proj_dir)
@@ -219,7 +221,7 @@ def optimal_route(start, finish, max_steps=60):
             wind_degree = ds.sel(latitude=point.lat, longitude=point.lng, method='nearest')['degree'].values.item()
 
             if step == 0:
-                headings = [deg for deg in range(0, 361, 2)]
+                headings = [deg for deg in range(0, 361, 10)]
                 for heading in headings:
                     true_wind_angle = calculate_true_wind_angle(heading, wind_degree)
                     speed = get_boat_speed_numpy(true_wind_angle, wind_speed)
@@ -262,64 +264,43 @@ def optimal_route(start, finish, max_steps=60):
     return isochrones_lats_lngs
 
 
-def optimal_route_numpy(start, finish, max_steps=2):
+def optimal_route_numpy(start, finish, max_steps=1):
     os.chdir(netcdf_dir)
     all_netcdfs = [file for file in glob.glob('*.nc')]
     os.chdir(proj_dir)
     ds = xarray.open_dataset(netcdf_dir + all_netcdfs[0])
 
-    # Hours of travel for each step
-    hours_of_travel = 1
+    # Course Degrees, Lat, Lon, True Wind Angle, Boat Speed, Distance to Start
+    isochrone_abstract = np.array([[0, 0, 0, 0, 0, 0] for deg in range(0, 361, 10)], dtype=float)
 
-    start = np.array([0, start['lat'], start['lng'], 0, 0, 0, 0], dtype=float)
-
-    # Course Degrees, Lat, Lon, Wind Speed, True Wind Angle, Boat Speed, Distance to Start
-    isochrone_abstract = np.array([[deg, 0, 0, 0, 0, 0, 0] for deg in range(0, 361, 10)])
-    point_abstract = np.array([[deg, 0, 0, 0, 0, 0, 0] for deg in range(-90, 91, 10)])
-
-    # Broadcast the start latitude and longitude
-    isochrones = np.broadcast_to(start, shape=(point_abstract.shape[0], point_abstract.shape[1]))
+    # Hold all of the isochrones
+    isochrones = []
+    isochrones_lats_lngs = []
+    #isochrones.append([np.array([[0, start['lat'], start['lng'], 0, 0, 0]], dtype=float)])
 
     # Calculate all the potential positions the boat could be in one time step
     for step in range(max_steps):
         next_isochrone = copy.deepcopy(isochrone_abstract)
-        print('STEP:', step)
+        next_isochrone_lat_lng = []
 
-        # For every point in the last isochrone look for the children
-        for point in isochrone_nodes[-1]:
-            print('POINT', point)
-            child_point = copy.deepcopy(point_abstract)
-            child_point[:, 1] = ds.sel(latitude=point.lat, longitude=point.lng, method='nearest')['speed'].values.item()
+        if step == 0:
+            # Course Degrees, Lat, Lon, True Wind Angle, Boat Speed, Distance to Start
+            current_isochrone = np.asarray([[deg, start['lat'], start['lng'], 0, 0, 0] for deg in range(0, 361, 10)], dtype=float)
+            # Don't explore, just go in all 360
+            for i in range(len(next_isochrone)):
+                # print(current_isochrone[i, :])
+                child_point = get_best_n_children(start, exploration_angle=30, exploration_degree_step=1, parent=current_isochrone[i, :])
+                next_isochrone[i, :] = child_point
+                next_isochrone_lat_lng.append((child_point[1], child_point[2]))
+        else:
+            current_isochrone = isochrones[-1]
 
-            wind_speed = ds.sel(latitude=point.lat, longitude=point.lng, method='nearest')['speed'].values.item()
-            wind_degree = ds.sel(latitude=point.lat, longitude=point.lng, method='nearest')['degree'].values.item()
 
+        isochrones.append(next_isochrone)
+        isochrones_lats_lngs.append(list(next_isochrone_lat_lng))
 
-            true_wind_angle = calculate_true_wind_angle(heading, wind_degree)
-            speed = get_boat_speed_numpy(true_wind_angle, wind_speed)
-            # Get the new location for traveling at speed for 1 hour. Polars are in nautical miles. fwd takes meters.
-            travel_distance = speed * 1852 * hours_of_travel
-            new_lon, new_lat, bew_back_azimuth = globe.fwd(lons=point.lng, lats=point.lat, az=heading, dist=travel_distance)
-            new_node = Node(lat=new_lat, lng=new_lon, time=0, parent=point, heading=heading)
-            # Rank the children by how far away they go from the origin
-            azimuth1, azimuth2, distance_to_origin = globe.inv(lats1=start.lat, lons1=start.lng, lats2=new_node.lat, lons2=new_node.lng)
-            #print('point:', (distance, heading, new_node), 'start:', start.lng, start.lat, 'point:', point.lng, point.lat)
+    print(isochrones)
 
-            # Take the top headings
-            next_isochrone.append(child_points.pop()[-1])
-
-        node_list = [node for node in next_isochrone]
-        node_list.sort(key=lambda x: x.heading)
-        isochrone_nodes.append(node_list)
-
-        polyline = smooth_to_contour(node_list)
-
-        if found_goal(polyline, finish_lat=finish['lat'], finish_lng=finish['lng']):
-            print('WE MADE IT!!!!!')
-            isochrones_lats_lngs.append(polyline)
-            return isochrones_lats_lngs
-
-        isochrones_lats_lngs.append(polyline)
     return isochrones_lats_lngs
 
 
@@ -331,6 +312,7 @@ def found_goal(isochrone, finish_lng, finish_lat):
     poly = Polygon(isochrone)
     return p1.within(poly)
 
+
 def smooth_to_contour(isochrone):
     lats = []
     lngs = []
@@ -339,6 +321,7 @@ def smooth_to_contour(isochrone):
     lngs1 = gaussian_filter(lngs, sigma=0, mode=['wrap'])
     latlngs = list(zip(lats1, lngs1))
     return latlngs
+
 
 class PriorityQueue:
     '''
@@ -369,26 +352,38 @@ def get_boat_speed_numpy_array(wind_speed, point, np_polars=polar_diagram):
     # Select the correct wind speed column
     col_index = np.argmin(abs(np_polars[0] - wind_speed)) + 1
     # get the wind degree column
-    degree = np_polars[1:,0]
-    degree = np.broadcast_to(degree, shape=(point.shape[0], degree.shape[0]))
-    #subract the wind angle so we can sort to the the closest .1 errs on the side of the a wider angle
-    temp[:,0] = np.nanargmin(abs(point[:,3][:, np.newaxis] -.1 - degree), axis=1) + 1
+    wind_degree = np_polars[1:,0]
+    wind_degree = np.broadcast_to(wind_degree, shape=(point.shape[0], wind_degree.shape[0]))
+    # subtract the wind angle so we can sort to the the closest .1 errs on the side of the a wider angle
+    true_wind_angle = np.broadcast_to(point[:,3][:,np.newaxis], shape=(wind_degree.shape[0], wind_degree.shape[1]))
+    degree_indexs = np.abs(wind_degree - true_wind_angle)
+    row_index = np.nanargmin(degree_indexs, axis=1) + 1
     # Assign to speed to point
-    point[:,3] = np_polars[temp[:,0]][:,col_index]
+    point[:,4] = np_polars[row_index, col_index]
 
 
-# Course Degrees, Lat, Lon, True Wind Angle, Boat Speed, Distance Traveled, Distance to Start
-point = np.array([180, 17, -144, 45, 0, 0], dtype=float)
-start = {'lat': 23, 'lng': -150}
-
-def get_best_n_children(start, parent, exploration_angle=45, n=1):
+def get_best_n_children(start, parent, exploration_angle=45, exploration_degree_step=10):
+    '''
+    Returns the child that travels the furthest from the starting point.
+    :param start: starting coordinates in dictionary format {'lat': 23, 'lng': -150}
+    :param parent: numpy array
+                    Course Degrees, Lat, Lon, True Wind Angle, Boat Speed, Distance to Start
+                    np.array([180, 17, -144, 45, 0, 0], dtype=float)
+    :param exploration_angle: The angle range for the point to consider
+    :param exploration_degree_step: The step size in degrees to consider
+    :param n: number of children to return. Not currently being used.
+    :return:
+    '''
     # Open the grib data for wind speed and direction
     os.chdir(netcdf_dir)
     all_netcdfs = [file for file in glob.glob('*.nc')]
     os.chdir(proj_dir)
     ds = xarray.open_dataset(netcdf_dir + all_netcdfs[0])
 
-    child = np.array([[deg, 0, 0, 0, 0, 0] for deg in range(-exploration_angle, exploration_angle + 1, 10)], dtype=float)
+    if exploration_angle == 0:
+        child = np.array([[parent[0], 0, 0, 0, 0, 0]],dtype=float)
+    else:
+        child = np.array([[deg, 0, 0, 0, 0, 0] for deg in range(-exploration_angle, exploration_angle + 1, exploration_degree_step)], dtype=float)
     parent = np.broadcast_to(parent, shape=child.shape)
 
     # explore the course heading relative to the parent
@@ -396,10 +391,10 @@ def get_best_n_children(start, parent, exploration_angle=45, n=1):
 
     # Get the wind speed and direction at the parent point
     wind_speed = ds.sel(latitude=parent[0, 1], longitude=parent[0, 2], method='nearest')['speed'].values.item()
-    child[:, 4] = ds.sel(latitude=parent[0, 1], longitude=parent[0, 2], method='nearest')['degree'].values.item()
+    wind_degree = ds.sel(latitude=parent[0, 1], longitude=parent[0, 2], method='nearest')['degree'].values.item()
 
     # Get the True Wind Angle
-    child[:, 3] = child[:, 0] - child[:, 4]
+    child[:, 3] = child[:, 0] - wind_degree
     # Condition where the angle is greater than 180 take the smaller angle
     mask1 = child[:, 3] > 180
     child[mask1, 3] -= 360
@@ -411,17 +406,21 @@ def get_best_n_children(start, parent, exploration_angle=45, n=1):
     get_boat_speed_numpy_array(wind_speed, child)
 
     # get the new lat and lng
-    child[:, 2], child[:, 1], back_azimuth = globe.fwd(lons=parent[:, 2], lats=parent[:, 1], az=child[:, 3] * 1852,
-                                                       dist=parent[:, 0])
+    child[:, 2], child[:, 1], back_azimuth = globe.fwd(lons=parent[:, 2], lats=parent[:, 1], az=child[:,0],
+                                                       dist=child[:, 4] * 1852)
     # Get the distance to the starting point
     start = np.array([start['lat'], start['lng']])
     start = np.broadcast_to(start, shape=(child.shape[0], start.shape[0]))
-    azimuth1, azimuth2, child[:, 5] = globe.inv(lats1=start[:,0], lons1=start[:,1], lats2=child[:,1],
-                                                       lons2=child[:,2])
-
+    azimuth1, azimuth2, child[:, 5] = globe.inv(lats1=start[:,0], lons1=start[:,1], lats2=child[:,1], lons2=child[:,2])
     index_of_max_distance_point = child[:,5].argmax(axis=0)
+
     return child[index_of_max_distance_point]
 
+# Course Degrees, Lat, Lon, True Wind Angle, Boat Speed, Distance to Start
+#point = np.array([180, 17, -144, 45, 0, 0], dtype=float)
+start = {'lat': 23, 'lng': -150}
 
-print(get_best_n_children(start, point))
 
+#print(get_best_n_children(start, point))
+x = optimal_route_numpy(start, start, 1)
+#print(x)
