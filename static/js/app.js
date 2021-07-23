@@ -3,8 +3,6 @@ var openStreetsMap = L.tileLayer('http://{s}.tile.openstreetmap.org/{z}/{x}/{y}.
     attribution: '&copy; ' + '<a href="http://openstreetmap.org">OpenStreetMap</a>' + ' Contributors',
     });
 
-//var maxBounds = L.latLngBounds({ lat: 52.56928286558243, lng: -95.88867187500001 }, { lat: 17.26672782352052, lng: -177.09960937500003 })
-
 function getBounds(bounds){
     return bounds
 }
@@ -64,7 +62,7 @@ L.easyButton('<img src="./static/images/check-square.svg">', function() {
     // Don't allow submission without the user creating a route
     //https://stackoverflow.com/questions/53463808/jquery-ajax-call-inside-a-then-function
     if (lines.length > 0){
-        console.log(polydata)
+        //console.log(polydata)
         $.ajax({
             url: '/calculate_optimal_route',
             type: "POST",
@@ -77,6 +75,7 @@ L.easyButton('<img src="./static/images/check-square.svg">', function() {
                 data: JSON.stringify(test),
                 dataType: "json",
                 success: plot_isochrone(test)
+                // TODO Fix callback error
             })
         });
     } else {
@@ -171,7 +170,7 @@ var overlayMaps = {
 
 L.control.layers(overlayMaps).addTo(map);
 
-// TODO use selected layer
+// TODO use selected layer to restrict the users to start and stop
 map.on('baselayerchange', function (e) {
     console.log(e.layer);
 });
@@ -188,9 +187,21 @@ function show_users_time(time){
 }
 
 function plot_isochrone(latlngs){
-    console.log(latlngs)
+    //console.log(latlngs)
+    var headings = latlngs[1].map(function(e, i) {
+      return [e, latlngs[0][i]];
+    });
     latlngs.forEach(function(line){
-        var polyline = L.polyline(line, {color: 'red', weight: 1, noClip: true, smoothFactor: 1}).addTo(map);
+        //console.log(line[0])
+        L.polyline(line, {color: 'red', weight: 1, noClip: true, smoothFactor: 1}).addTo(map);
+        line.forEach(function (point){
+            //console.log(point)
+            L.circle(point,{radius: 2}).addTo(map);
+        });
+    });
+    //console.log(headings)
+    headings.forEach(function (heading){
+       // L.polyline(heading, {color: 'red', weight: 1, noClip: true, smoothFactor: 1}).addTo(map);
     });
 }
 
