@@ -1,11 +1,16 @@
 import numpy as np
 import glob, os, time, requests, xarray, datetime, math
 import pandas as pd
+import scipy.stats
 from pyproj import Geod
-from shapely.geometry import Point, Polygon
+from shapely.geometry import Point, Polygon, MultiPolygon
 from scipy.ndimage.filters import gaussian_filter
 import heapq
 from config import Config
+from shapely.geometry import shape, JOIN_STYLE
+
+from scipy import stats
+
 
 # Directory References
 netcdf_dir = './static/data/netcdf/'
@@ -29,14 +34,17 @@ polar_diagram = polar_diagram[np.argsort(polar_diagram[:, 0])]
 
 
 class Node:
-    def __init__(self, lat, lng, time, parent, heading, dist_start, dist_finish):
+    def __init__(self, lat, lng, time, parent, heading, dist_start, dist_finish, true_wind_angle, start_heading, dist_traveled):
         self.lat = lat
         self.lng = lng
         self.dist_start = dist_start
         self.dist_finish = dist_finish
+        self.dist_traveled = dist_traveled
         self.time = datetime.timedelta(seconds=time).seconds
         self.parent = parent
         self.heading = heading
+        self.true_wind_angle = true_wind_angle
+        self.start_heading = int(start_heading)
 
 
 class PriorityQueue:
@@ -213,6 +221,15 @@ def get_wind_speed_and_degree_for_routes(routes):
     return route_segments[-1]['time']
 
 
+def found_goal(isochrone, finish_lng, finish_lat):
+    # https://automating-gis-processes.github.io/CSC18/lessons/L4/point-in-polygon.html
+    # Create Point objects
+    p1 = Point(finish_lat, finish_lng)
+    # Create a Polygon
+    poly = Polygon(isochrone)
+    return p1.within(poly)
+
+
 def calculate_true_wind_angle(heading, wind_degree):
     '''
     :param heading: This is the course the route is define by
@@ -227,91 +244,24 @@ def calculate_true_wind_angle(heading, wind_degree):
     return abs(result)
 
 
-def optimal_route(start, finish, max_steps=15):
+def isochrone_optimal_route(start, finish, max_steps=2):
     os.chdir(netcdf_dir)
     all_netcdfs = [file for file in glob.glob('*.nc')]
     os.chdir(proj_dir)
     ds = xarray.open_dataset(netcdf_dir + all_netcdfs[0])
 
-    start = Node(lat=start['lat'], lng=start['lng'], time=0, parent=None, heading=None)
-    isochrone_nodes = [[start]]
-    isochrones_lats_lngs = []
-
-    # Hours of travel for each step
-    hours_of_travel = 1
-
-    # Calculate all the potential positions the boat could be in one time step
-    for step in range(max_steps):
-        next_isochrone = []
-        print('STEP:', step)
-
-        # For every point in the last isochrone look for the children
-        for point in isochrone_nodes[-1]:
-            child_points = PriorityQueue()
-            wind_speed = ds.sel(latitude=point.lat, longitude=point.lng, method='nearest')['speed'].values.item()
-            wind_degree = ds.sel(latitude=point.lat, longitude=point.lng, method='nearest')['degree'].values.item()
-
-            if step == 0:
-                headings = [deg for deg in range(0, 361, 5)]
-                for heading in headings:
-                    true_wind_angle = calculate_true_wind_angle(heading, wind_degree)
-                    speed = max(get_boat_speed_numpy(true_wind_angle, wind_speed), Config.motoring_speed)
-                    travel_distance = speed * 1852 * hours_of_travel
-                    # Get the new location for traveling at speed for 1 hour. Polars are in nautical miles. fwd takes meters.
-                    new_location = globe.fwd(lons=point.lng, lats=point.lat, az=heading, dist=travel_distance)
-                    new_node = Node(lat=new_location[1], lng=new_location[0], time=0, parent=start, heading=heading)
-                    next_isochrone.append(new_node)
-
-            else:
-                headings = [deg + point.heading for deg in range(-60, 61, 10)]
-                for heading in headings:
-                    true_wind_angle = calculate_true_wind_angle(heading, wind_degree)
-                    speed = max(get_boat_speed_numpy(true_wind_angle, wind_speed), Config.motoring_speed)
-                    # Get the new location for traveling at speed for 1 hour. Polars are in nautical miles. fwd takes meters.
-                    travel_distance = speed * 1852 * hours_of_travel
-                    new_lon, new_lat, bew_back_azimuth = globe.fwd(lons=point.lng, lats=point.lat, az=heading, dist=travel_distance)
-                    new_node = Node(lat=new_lat, lng=new_lon, time=hours_of_travel + point.time, parent=point, heading=heading)
-                    # Rank the children by how far away they go from the origin
-                    azimuth1, azimuth2, distance_to_origin = globe.inv(lats1=start.lat, lons1=start.lng, lats2=new_node.lat, lons2=new_node.lng)
-                    child_points.push((-distance_to_origin, heading, new_node))
-                    #print('point:', (distance, heading, new_node), 'start:', start.lng, start.lat, 'point:', point.lng, point.lat)
-
-                # Take the top headings
-                next_isochrone.append(child_points.pop()[-1])
-
-        node_list = [node for node in next_isochrone]
-        node_list.sort(key=lambda x: x.heading)
-        isochrone_nodes.append(node_list)
-
-        polyline = smooth_to_contour(node_list)
-
-        if found_goal(polyline, finish_lat=finish['lat'], finish_lng=finish['lng']):
-            print('WE MADE IT!!!!!')
-            isochrones_lats_lngs.append(polyline)
-            return isochrones_lats_lngs
-
-        isochrones_lats_lngs.append(polyline)
-    return isochrones_lats_lngs
-
-
-def optimal_route_smoothed(start, finish, max_steps=2):
-    os.chdir(netcdf_dir)
-    all_netcdfs = [file for file in glob.glob('*.nc')]
-    os.chdir(proj_dir)
-    ds = xarray.open_dataset(netcdf_dir + all_netcdfs[0])
-
-    start_node = Node(lat=start['lat'], lng=start['lng'], time=0, parent=None, heading=None, dist_start=0, dist_finish=0)
-    finish_node = Node(lat=finish['lat'], lng=finish['lng'], time=0, parent=None, heading=None, dist_start=0, dist_finish=0)
+    start_node = Node(lat=start['lat'], lng=start['lng'], time=0, parent=None, heading=None, dist_start=0, dist_finish=0, true_wind_angle=0, start_heading=0, dist_traveled=0)
+    finish_node = Node(lat=finish['lat'], lng=finish['lng'], time=0, parent=None, heading=None, dist_start=0, dist_finish=0, true_wind_angle=0, start_heading=0, dist_traveled=0)
     isochrones_nodes = [[start_node]]
     isochrones_lat_lng = []
 
     # Hours of travel for each step
-    hours_of_travel = 6
+    hours_of_travel = 3
     # TODO correct how this is done. Currently skipping lots of data.
 
     # Calculate all the potential positions the boat could be in one time step
     for step in range(max_steps):
-        next_isochrone = []
+        next_isochrone = {}
         print('STEP:', step)
 
         for parent_node in isochrones_nodes[-1]:
@@ -319,97 +269,87 @@ def optimal_route_smoothed(start, finish, max_steps=2):
             wind_degree = ds.sel(latitude=parent_node.lat, longitude=parent_node.lng, method='nearest')['degree'].values.item()
 
             if step == 0:
-                for heading in [deg for deg in range(0, 181, 1)]:
+                for heading in [deg for deg in range(0, 361, 1)]:
                     true_wind_angle = calculate_true_wind_angle(heading, wind_degree)
                     speed = max(get_boat_speed_numpy(true_wind_angle, wind_speed), Config.motoring_speed)
                     distance = speed * 1852 * hours_of_travel
                     # Get the new location for traveling at speed for 1 hour. Polars are in nautical miles. fwd takes meters.
                     lng, lat, back_azimuth = globe.fwd(lons=parent_node.lng, lats=parent_node.lat, az=heading, dist=distance)
                     azimuth1, azimuth2, dist_finish = globe.inv(lats1=finish_node.lat, lons1=finish_node.lng, lats2=lat, lons2=lng)
-                    next_isochrone.append(Node(lat=lat, lng=lng, time=0, parent=start_node, heading=heading, dist_start=distance, dist_finish=dist_finish))
+                    azimuth1, azimuth2, dist_start = globe.inv(lats1=start_node.lat, lons1=start_node.lng, lats2=lat, lons2=lng)
+                    node = Node(lat=lat, lng=lng, time=0, parent=start_node, heading=heading, dist_start=dist_start, dist_finish=dist_finish, true_wind_angle=true_wind_angle, start_heading=azimuth2, dist_traveled=distance)
+                    next_isochrone[heading] = node
 
             else:
                 child_points = PriorityQueue()
+
                 for heading in [parent_node.heading + deg for deg in range(-90, 91, 1)]:
                     true_wind_angle = calculate_true_wind_angle(heading, wind_degree)
                     speed = max(get_boat_speed_numpy(true_wind_angle, wind_speed), Config.motoring_speed)
                     distance = speed * 1852 * hours_of_travel
                     # Get the new location for traveling at speed for 1 hour. Polars are in nautical miles. fwd takes meters.
-                    lng, lat, back_azimuth = globe.fwd(lons=parent_node.lng, lats=parent_node.lat, az=heading,  dist=distance)
-                    #azimuth1, azimuth2, dist_start = globe.inv(lats1=start_node.lat, lons1=start_node.lng, lats2=lat, lons2=lng)
+                    lng, lat, back_azimuth = globe.fwd(lons=parent_node.lng, lats=parent_node.lat, az=heading, dist=distance)
                     azimuth1, azimuth2, dist_finish = globe.inv(lats1=finish_node.lat, lons1=finish_node.lng, lats2=lat, lons2=lng)
-                    node = Node(lat=lat, lng=lng, time=0, parent=parent_node, heading=heading, dist_start=distance, dist_finish=dist_finish)
-                    #child_points1.push((-dist_start, node))
+                    azimuth1, azimuth2, dist_start = globe.inv(lats1=start_node.lat, lons1=start_node.lng, lats2=lat, lons2=lng)
+                    node = Node(lat=lat, lng=lng, time=0, parent=start_node, heading=heading, dist_start=dist_start, dist_finish=dist_finish, true_wind_angle=true_wind_angle, start_heading=azimuth2, dist_traveled=distance)
                     # Take the node that goes furthest outward from the parent node
                     child_points.push((-np.tan(heading - parent_node.heading), node))
                 chosen_node = child_points.pop()[-1]
 
                 # Do not keep any headings with an angle less than 24 degree, We may however use their opposing tack at -90
-                if calculate_true_wind_angle(chosen_node.heading, wind_degree) >= 24:
-                    next_isochrone.append(chosen_node)
+                if chosen_node.heading + chosen_node.true_wind_angle >= 20:
+                    next_isochrone[chosen_node.start_heading] = chosen_node
 
                 # if the true wind angle is less than 45 we should consider tacking. We should then keep both points.
-                if 40 <= calculate_true_wind_angle(chosen_node.heading, wind_degree) <= 55:
-                    print(parent_node.heading, chosen_node.heading)
-                    true_wind_angle = calculate_true_wind_angle(chosen_node.heading - 90, wind_degree)
-                    speed = max(get_boat_speed_numpy(true_wind_angle, wind_speed), Config.motoring_speed)
-                    distance = speed * 1852 * hours_of_travel
-                    # Get the new location for traveling at speed for 1 hour. Polars are in nautical miles. fwd takes meters.
-                    lng, lat, back_azimuth = globe.fwd(lons=parent_node.lng, lats=parent_node.lat, az=chosen_node.heading - 90,
-                                                       dist=distance)
-                    # azimuth1, azimuth2, dist_start = globe.inv(lats1=start_node.lat, lons1=start_node.lng, lats2=lat, lons2=lng)
-                    azimuth1, azimuth2, dist_finish = globe.inv(lats1=finish_node.lat, lons1=finish_node.lng, lats2=lat,
-                                                                lons2=lng)
-                    node = Node(lat=lat, lng=lng, time=0, parent=parent_node, heading=chosen_node.heading - 90, dist_start=distance,
-                                dist_finish=dist_finish)
-                    next_isochrone.append(node)
+                if chosen_node.true_wind_angle <= 90:
+                    for tack in [-90, 90]:
+                        true_wind_angle = calculate_true_wind_angle(chosen_node.heading + tack, wind_degree)
+                        speed = max(get_boat_speed_numpy(true_wind_angle, wind_speed), Config.motoring_speed)
+                        distance = speed * 1852 * hours_of_travel
+                        # Get the new location for traveling at speed for 1 hour. Polars are in nautical miles. fwd takes meters.
+                        lng, lat, back_azimuth = globe.fwd(lons=parent_node.lng, lats=parent_node.lat, az=chosen_node.heading + tack,
+                                                           dist=distance)
+                        azimuth1, azimuth2, dist_finish = globe.inv(lats1=finish_node.lat, lons1=finish_node.lng, lats2=lat,
+                                                                    lons2=lng)
+                        azimuth1, azimuth2, dist_start = globe.inv(lats1=start_node.lat, lons1=start_node.lng, lats2=lat,
+                                                                   lons2=lng)
+                        node = Node(lat=lat, lng=lng, time=0, parent=parent_node, heading=chosen_node.heading + tack, dist_start=distance,
+                                    dist_finish=dist_finish, true_wind_angle=true_wind_angle, start_heading=azimuth2, dist_traveled=distance)
+
+                        # Do not head back towards the start!
+                        if node.dist_start > parent_node.dist_start:
+                            if not node.start_heading in next_isochrone:
+                                next_isochrone[node.start_heading] = node
+                            elif next_isochrone[node.start_heading].dist_start < node.dist_start:
+                                next_isochrone[node.start_heading] = node
 
 
-        nodes, lat_lngs = create_smoothed_node_isochrones(next_isochrone, start_node)
-        isochrones_nodes.append(nodes)
-        isochrones_lat_lng.append(lat_lngs)
+        # Attempt to filter the isochrone by stand deivation
+        #next_isochrone_dist_start = [(node.dist_start) for node in next_isochrone_list]
+        #print(next_isochrone_dist_start)
+        #std = scipy.stats.tstd(next_isochrone_dist_start)
+        #mean = scipy.stats.tmean(next_isochrone_dist_start)
+        #print(mean, std)
+        #cleaned_nodes = [node for node in next_isochrone_list if mean - std < node.dist_start < mean + std]
+
+        next_isochrone_list = list(next_isochrone.values())
+        next_isochrone_list.sort(key=lambda x: x.start_heading)
+        next_isochrone_lat_lng = [(node.lat, node.lng) for node in next_isochrone_list]
+
+        #next_isochrone_list, next_isochrone_lat_lng = create_smoothed_node_isochrones(list(next_isochrone.values()), start_node)
+
+        isochrones_nodes.append(next_isochrone_list)
+        isochrones_lat_lng.append(next_isochrone_lat_lng)
 
     return isochrones_lat_lng
 
 
-def found_goal(isochrone, finish_lng, finish_lat):
-    # https://automating-gis-processes.github.io/CSC18/lessons/L4/point-in-polygon.html
-    # Create Point objects
-    p1 = Point(finish_lat, finish_lng)
-    # Create a Polygon
-    poly = Polygon(isochrone)
-    return p1.within(poly)
-
-
-def smooth_to_contour(isochrone):
-    lats = []
-    lngs = []
-    [(lats.append(node.lat), lngs.append(node.lng)) for node in isochrone]
-    lats1 = gaussian_filter(lats, sigma=2, mode=['wrap'])
-    lngs1 = gaussian_filter(lngs, sigma=2, mode=['wrap'])
-    latlngs = list(zip(lats1, lngs1))
-    return latlngs
-
-def create_smoothed_isochrones(isochrone_list, parent, time):
-    isochrone_list.sort(key=lambda x: x[2])
-    lats, lngs = zip(*[(i[0], i[1]) for i in isochrone_list])
-    lats_smoothed = gaussian_filter(lats, sigma=0, mode=['wrap'])
-    lngs_smoothed = gaussian_filter(lngs, sigma=0, mode=['wrap'])
-    smoothed_isochrone = list(zip(lats_smoothed, lngs_smoothed))
-    return [[smoothed_isochrone]]
-
 def create_smoothed_node_isochrones(isochrone_list, start):
-    import scipy.ndimage
-    # Resample your data grid by a factor of 3 using cubic spline interpolation.
-    isochrone_list.sort(key=lambda x: x.heading)
+    isochrone_list.sort(key=lambda x: x.start_heading)
+
     lats, lngs = zip(*[(node.lat, node.lng) for node in isochrone_list])
-
-    data = scipy.ndimage.zoom(list(zip(lats,lngs)), 3)
-    #print(list(zip(lats,lngs)))
-    #print(data)
-
-    lats_smoothed = gaussian_filter(lats, sigma=0, mode=['wrap'])
-    lngs_smoothed = gaussian_filter(lngs, sigma=0, mode=['wrap'])
+    lats_smoothed = gaussian_filter(lats, sigma=2)
+    lngs_smoothed = gaussian_filter(lngs, sigma=2)
     smoothed_lat_lng = list(zip(lats_smoothed, lngs_smoothed))
     lat_lng = []
     for i in range(len(isochrone_list)):
@@ -420,11 +360,4 @@ def create_smoothed_node_isochrones(isochrone_list, start):
         lat_lng.append((lat, lng))
     return isochrone_list, lat_lng
 
-# Course Degrees, Lat, Lon, True Wind Angle, Boat Speed, Distance to Start
-#point = np.array([180, 17, -144, 45, 0, 0], dtype=float)
-#start = {'lat': 23, 'lng': -150}
-
-#print(get_best_n_children(start, point))
-#x = optimal_route_numpy(start, start, 1)
-#print(x)
 

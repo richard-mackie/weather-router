@@ -201,7 +201,7 @@ function plot_isochrone(latlngs){
     });
     //console.log(headings)
     headings.forEach(function (heading){
-       // L.polyline(heading, {color: 'red', weight: 1, noClip: true, smoothFactor: 1}).addTo(map);
+        //L.polyline(heading, {color: 'red', weight: 1, noClip: true, smoothFactor: 1}).addTo(map);
     });
 }
 
