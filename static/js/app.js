@@ -3,10 +3,6 @@ var openStreetsMap = L.tileLayer('http://{s}.tile.openstreetmap.org/{z}/{x}/{y}.
     attribution: '&copy; ' + '<a href="http://openstreetmap.org">OpenStreetMap</a>' + ' Contributors',
     });
 
-function getBounds(bounds){
-    return bounds
-}
-
 var map = L.map('map',{
     worldCopyJump: true,
     preferCanvas: true,
@@ -18,6 +14,9 @@ var map = L.map('map',{
 
 let polylineMeasure = L.control.polylineMeasure ({position:'topleft', unit:'nauticalmiles', showBearings:true, clearMeasurementsOnStop: false, showClearControl: true, showUnitControl: false})
 polylineMeasure.addTo(map);
+
+// TODO Change anchor to something better
+// TODO limit the start and stopping submissions
 
 // Add submit routes button to the leaflet. Sends the data back to flask as a json.
 L.easyButton('<img src="./static/images/anchor.svg">',function() {
@@ -213,7 +212,12 @@ function plot_astar_points(latlngs){
 }
 
 function plot_astar_route(latlngs){
+    alert('Found it!');
     L.polyline(latlngs, {color: 'red', weight: 1, noClip: true, smoothFactor: 1}).addTo(map);
+}
+
+function getBounds(bounds){
+    return bounds
 }
 
 //;

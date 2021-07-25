@@ -6,15 +6,10 @@ from config import Config
 
 app = Flask(__name__)
 
-# Raw GRIBS obtained from NOAA
-grib_directory = './static/data/gribs/'
-# Converted GRIBS for display on leaflet with windbarb plugin
-json_directory = './static/data/json/'
-jsons = utils.get_jsons()
-
 @app.route('/', methods = ['GET'])
 def index():
-    file = open(json_directory + jsons[0], 'r')
+    # Load converted json file for display on leaflet with windbarb plugin
+    file = open(Config.json_dir + utils.get_jsons()[0], 'r')
     return render_template('index.html', data=json.load(file), extents=Config.extents)
 
 @app.route('/process_user_route', methods=['GET','POST'])
@@ -30,7 +25,6 @@ def router():
     routes = request.get_json()
     start = routes[0][0]
     finish = routes[0][-1]
-    #optimal_route = utils.isochrone_optimal_route(start, finish)
     optimal_route = astar.astar_optimal_route(start, finish)
     res = make_response(jsonify(optimal_route), 200)
     return res

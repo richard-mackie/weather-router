@@ -1,11 +1,11 @@
 import heapq
-import datetime
 import mercantile
 import numpy as np
 
-from config import Config
 import utils
-from pyproj import Geod
+from config import Config
+from utils import get_most_recent_netcdf, get_boat_speed, calculate_true_wind_angle
+
 class PriorityQueue:
     '''
     Wrapper for heapq
@@ -28,25 +28,14 @@ class PriorityQueue:
 
     def pop(self):
         return heapq.heappop(self.heap)
-import os
-import xarray
-import glob
-
-# Used for geodesic calculations
-globe = Geod(ellps='clrk66')  # Use Clarke 1866 ellipsoid.
-
-# Directory References
-netcdf_dir = './static/data/netcdf/'
-grib_dir = './static/data/gribs/'
-json_dir = './static/data/json/'
-proj_dir = '/home/richard/PycharmProjects/mweatherrouter'
-
 
 class Node:
-    def __init__(self, lat, lng, time, parent, heading, distance_to_finish, distance_traveled):
+    def __init__(self, lat, lng, time=0, parent=None, heading=0, distance_to_finish=0, distance_traveled=0):
         self.lat = lat
         self.lng = lng
-        self.grid_location = mercantile.tile(self.lat, self.lng, zoom=20)
+        # This creates a semi unique identifier. Same as the index for slippy maps
+        # https://wiki.openstreetmap.org/wiki/Slippy_map_tilenames
+        self.grid_location = mercantile.tile(self.lat, self.lng, zoom=14)
         self.time = time
         self.parent = parent
         self.heading = heading
@@ -54,59 +43,54 @@ class Node:
         self.distance_to_finish = distance_to_finish
 
 def vmg(node, speed, finish_bearing, true_wind_angle):
-
+    '''
+    Velocity Made Good. This is the speed that is actually going towards the destination.
+    '''
     vmg = speed * np.cos(np.radians(true_wind_angle))
-    #print('Heading: {} True Wind Angle: {} VMG: {} '.format(node.heading, true_wind_angle, vmg))
-
     return vmg
 
-def astar_optimal_route(start, finish, max_steps=36):
+def astar_optimal_route(start, finish, max_steps=3600):
+    # These are latlon tuples for display purposes only
+    leaflet_points = []
+    # This gives a way to end the search
+    step = 0
+    hours_of_travel = 1
+    # This holds the wind degree and speed
+    wind_data = get_most_recent_netcdf()
 
-    os.chdir(netcdf_dir)
-    all_netcdfs = [file for file in glob.glob('*.nc')]
-    os.chdir(proj_dir)
-    ds = xarray.open_dataset(netcdf_dir + all_netcdfs[0])
-
-    start_node = Node(lat=start['lat'], lng=start['lng'], time=0, parent=None, heading=None, distance_to_finish=0, distance_traveled=0)
-    finish_node = Node(lat=finish['lat'], lng=finish['lng'], time=0, parent=None, heading=None, distance_to_finish=0, distance_traveled=0)
+    start_node = Node(lat=start['lat'], lng=start['lng'])
+    finish_node = Node(lat=finish['lat'], lng=finish['lng'])
 
     frontier = PriorityQueue()
     frontier.push((0, start_node))
     visited = {start_node.grid_location: None}
     cost_so_far = {start_node: 0}
 
-    circles = []
-
-    step = 0
-    hours_of_travel = 1
-
     while not frontier.empty() and step < max_steps:
         current_node = frontier.pop()[-1]
-
-        print('Current Node', current_node.heading)
-
-        wind_speed = ds.sel(latitude=current_node.lat, longitude=current_node.lng, method='nearest')['speed'].values.item()
-        wind_degree = ds.sel(latitude=current_node.lat, longitude=current_node.lng, method='nearest')['degree'].values.item()
+        wind_speed = wind_data.sel(latitude=current_node.lat, longitude=current_node.lng, method='nearest')['speed'].values.item()
+        wind_degree = wind_data.sel(latitude=current_node.lat, longitude=current_node.lng, method='nearest')['degree'].values.item()
 
         if current_node.grid_location == finish_node.grid_location:
 
-            result = []
+            route = []
             current = current_node
 
             while current.parent != None:
-                result.append((current.lat, current.lng))
+                route.append({'lat': current.lat, 'lng':current.lng})
                 current = current.parent
 
-            return circles
+            print('Optimal Path', utils.get_wind_speed_and_degree_for_routes(routes=[route]))
+            return route
 
-        for heading in [deg for deg in range(0, 361, 10)]:
-            true_wind_angle = utils.calculate_true_wind_angle(heading, wind_degree)
-            speed = max(utils.get_boat_speed_numpy(true_wind_angle, wind_speed), Config.motoring_speed)
+        for heading in [deg for deg in range(0, 361, 1)]:
+            true_wind_angle = calculate_true_wind_angle(heading, wind_degree)
+            speed = max(get_boat_speed(true_wind_angle, wind_speed), Config.motoring_speed)
             distance = speed * hours_of_travel
             vmg = speed * np.cos(np.radians(true_wind_angle))
             # Get the new location for traveling at speed for 1 hour. Polars are in nautical miles. fwd takes meters.
-            lng, lat, back_azimuth = globe.fwd(lons=current_node.lng, lats=current_node.lat, az=heading, dist=distance * 1852)
-            azimuth1, azimuth2, dist_finish = globe.inv(lats1=finish_node.lat, lons1=finish_node.lng, lats2=lat, lons2=lng)
+            lng, lat, back_azimuth = Config.globe.fwd(lons=current_node.lng, lats=current_node.lat, az=heading, dist=distance * 1852)
+            azimuth1, azimuth2, dist_finish = Config.globe.inv(lats1=finish_node.lat, lons1=finish_node.lng, lats2=lat, lons2=lng)
 
             node = Node(lat=lat,
                         lng=lng,
@@ -116,18 +100,20 @@ def astar_optimal_route(start, finish, max_steps=36):
                         heading=heading,
                         distance_to_finish=dist_finish
                         )
-            print('Heading: {} True Wind Angle: {} VMG: {} Distance{}'.format(node.heading, true_wind_angle, vmg,
-                                                                              distance))
+
+            #print('Heading: {} True Wind Angle: {} VMG: {} Distance{}'.format(node.heading, true_wind_angle, vmg,
+            #                                                                  distance))
 
             if node.grid_location not in cost_so_far or node.time < cost_so_far[node.grid_location]:
                 cost_so_far[node.grid_location] = node.time
-                frontier.push((node.time, step, heading, node))
+                #TODO come up with a better heuristic
+                frontier.push((node.distance_to_finish, step, heading, node))
                 visited[node] = current_node
-                circles.append((node.lat, node.lng))
+                leaflet_points.append((node.lat, node.lng))
 
         step += 1
 
-    return circles
+    return leaflet_points
 
 
 
