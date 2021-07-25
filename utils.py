@@ -33,7 +33,7 @@ polar_diagram = np.nan_to_num(polar_diagram, nan=-np.inf)
 polar_diagram = polar_diagram[np.argsort(polar_diagram[:, 0])]
 
 
-class Node:
+class isochrone_Node:
     def __init__(self, lat, lng, time, parent, heading, dist_start, dist_finish, true_wind_angle, start_heading, dist_traveled):
         self.lat = lat
         self.lng = lng
@@ -250,8 +250,8 @@ def isochrone_optimal_route(start, finish, max_steps=2):
     os.chdir(proj_dir)
     ds = xarray.open_dataset(netcdf_dir + all_netcdfs[0])
 
-    start_node = Node(lat=start['lat'], lng=start['lng'], time=0, parent=None, heading=None, dist_start=0, dist_finish=0, true_wind_angle=0, start_heading=0, dist_traveled=0)
-    finish_node = Node(lat=finish['lat'], lng=finish['lng'], time=0, parent=None, heading=None, dist_start=0, dist_finish=0, true_wind_angle=0, start_heading=0, dist_traveled=0)
+    start_node = isochrone_Node(lat=start['lat'], lng=start['lng'], time=0, parent=None, heading=None, dist_start=0, dist_finish=0, true_wind_angle=0, start_heading=0, dist_traveled=0)
+    finish_node = isochrone_Node(lat=finish['lat'], lng=finish['lng'], time=0, parent=None, heading=None, dist_start=0, dist_finish=0, true_wind_angle=0, start_heading=0, dist_traveled=0)
     isochrones_nodes = [[start_node]]
     isochrones_lat_lng = []
 
@@ -277,7 +277,7 @@ def isochrone_optimal_route(start, finish, max_steps=2):
                     lng, lat, back_azimuth = globe.fwd(lons=parent_node.lng, lats=parent_node.lat, az=heading, dist=distance)
                     azimuth1, azimuth2, dist_finish = globe.inv(lats1=finish_node.lat, lons1=finish_node.lng, lats2=lat, lons2=lng)
                     azimuth1, azimuth2, dist_start = globe.inv(lats1=start_node.lat, lons1=start_node.lng, lats2=lat, lons2=lng)
-                    node = Node(lat=lat, lng=lng, time=0, parent=start_node, heading=heading, dist_start=dist_start, dist_finish=dist_finish, true_wind_angle=true_wind_angle, start_heading=azimuth2, dist_traveled=distance)
+                    node = isochrone_Node(lat=lat, lng=lng, time=0, parent=start_node, heading=heading, dist_start=dist_start, dist_finish=dist_finish, true_wind_angle=true_wind_angle, start_heading=azimuth2, dist_traveled=distance)
                     next_isochrone[heading] = node
 
             else:
@@ -291,7 +291,7 @@ def isochrone_optimal_route(start, finish, max_steps=2):
                     lng, lat, back_azimuth = globe.fwd(lons=parent_node.lng, lats=parent_node.lat, az=heading, dist=distance)
                     azimuth1, azimuth2, dist_finish = globe.inv(lats1=finish_node.lat, lons1=finish_node.lng, lats2=lat, lons2=lng)
                     azimuth1, azimuth2, dist_start = globe.inv(lats1=start_node.lat, lons1=start_node.lng, lats2=lat, lons2=lng)
-                    node = Node(lat=lat, lng=lng, time=0, parent=start_node, heading=heading, dist_start=dist_start, dist_finish=dist_finish, true_wind_angle=true_wind_angle, start_heading=azimuth2, dist_traveled=distance)
+                    node = isochrone_Node(lat=lat, lng=lng, time=0, parent=start_node, heading=heading, dist_start=dist_start, dist_finish=dist_finish, true_wind_angle=true_wind_angle, start_heading=azimuth2, dist_traveled=distance)
                     # Take the node that goes furthest outward from the parent node
                     child_points.push((-np.tan(heading - parent_node.heading), node))
                 chosen_node = child_points.pop()[-1]
@@ -313,8 +313,8 @@ def isochrone_optimal_route(start, finish, max_steps=2):
                                                                     lons2=lng)
                         azimuth1, azimuth2, dist_start = globe.inv(lats1=start_node.lat, lons1=start_node.lng, lats2=lat,
                                                                    lons2=lng)
-                        node = Node(lat=lat, lng=lng, time=0, parent=parent_node, heading=chosen_node.heading + tack, dist_start=distance,
-                                    dist_finish=dist_finish, true_wind_angle=true_wind_angle, start_heading=azimuth2, dist_traveled=distance)
+                        node = isochrone_Node(lat=lat, lng=lng, time=0, parent=parent_node, heading=chosen_node.heading + tack, dist_start=distance,
+                                              dist_finish=dist_finish, true_wind_angle=true_wind_angle, start_heading=azimuth2, dist_traveled=distance)
 
                         # Do not head back towards the start!
                         if node.dist_start > parent_node.dist_start:

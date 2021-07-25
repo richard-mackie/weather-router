@@ -1,4 +1,6 @@
 from flask import Flask, url_for, render_template, jsonify, request, redirect, make_response
+
+import astar
 import utils, json
 from config import Config
 
@@ -28,7 +30,8 @@ def router():
     routes = request.get_json()
     start = routes[0][0]
     finish = routes[0][-1]
-    optimal_route = utils.isochrone_optimal_route(start, finish)
+    #optimal_route = utils.isochrone_optimal_route(start, finish)
+    optimal_route = astar.astar_optimal_route(start, finish)
     res = make_response(jsonify(optimal_route), 200)
     return res
 
