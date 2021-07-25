@@ -74,7 +74,7 @@ L.easyButton('<img src="./static/images/check-square.svg">', function() {
                 type: "GET",
                 data: JSON.stringify(test),
                 dataType: "json",
-                success: plot_astar(test)
+                success: plot_astar_points(test)
                 // TODO Fix callback error
             })
         });
@@ -205,11 +205,15 @@ function plot_isochrone(latlngs){
     });
 }
 
-function plot_astar(latlngs){
+function plot_astar_points(latlngs){
     latlngs.forEach(function(point){
         console.log(point)
         L.circle(point,{radius: 2}).addTo(map);
     });
+}
+
+function plot_astar_route(latlngs){
+    L.polyline(latlngs, {color: 'red', weight: 1, noClip: true, smoothFactor: 1}).addTo(map);
 }
 
 //;
