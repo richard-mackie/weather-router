@@ -75,6 +75,7 @@ L.easyButton('<img src="./static/images/check-square.svg">', function() {
                 dataType: "json",
                 success: plot_astar_points(test)
                 // TODO Fix callback error
+                // TODO add feedback for user to wait
             })
         });
     } else {
@@ -219,6 +220,8 @@ function plot_astar_route(latlngs){
 function getBounds(bounds){
     return bounds
 }
+
+
 
 //;
 // Show Coordinates on click

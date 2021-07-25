@@ -114,15 +114,11 @@ def get_boat_speed(true_wind_angle, wind_speed, np_polars=polar_diagram):
 def get_wind_speed_and_degree_for_routes(routes):
     # This holds the wind degree and speed
     wind_data = get_most_recent_netcdf()
-
     route = routes[0]
-
     route_segments = []
     start_time = datetime.timedelta(minutes=0, seconds=0)
 
     for i in range(len(route) - 1):
-        # Need to convert the leaflet coordinate system back to gfs system
-        # TODO create a single cordinate system
         start_lat = route[i]['lat']
         start_lng = route[i]['lng']
         finish_lat = route[i + 1]['lat']
@@ -130,7 +126,7 @@ def get_wind_speed_and_degree_for_routes(routes):
 
         # https://pyproj4.github.io/pyproj/stable/api/geod.html
         azimuth1, azimuth2, distance = Config.globe.inv(start_lng, start_lat, finish_lng, finish_lat)
-        # Convert meters to nautical miles
+        # Convert distance(meters) to nautical miles
         distance *= 0.000539957
         course_bearing = azimuth2 + 180
 
@@ -140,11 +136,17 @@ def get_wind_speed_and_degree_for_routes(routes):
         true_wind_angle = calculate_true_wind_angle(course_bearing, wind_degree)
         boat_speed = get_boat_speed(true_wind_angle, wind_speed)
 
-        # This gives us a mininum boat speed of 1 knot, the polar diagrams are not completely filled out.
+        # This gives us a minimum boat speed of 1 knot, the polar diagrams are not completely filled out.
         time = start_time + datetime.timedelta(hours=distance/max(boat_speed, Config.motoring_speed))
-        route_segment = {'id': i, 'start_lat_lon': (start_lat, start_lng), 'finish_lat_lon': (finish_lat, finish_lng), 'distance': distance, 'wind_speed': wind_speed,
-                         'wind_degree': wind_degree, 'course_bearing':course_bearing, 'boat_speed':boat_speed, 'time':time}
-        #(route_segment)
+        route_segment = {'id': i,
+                         'start_lat_lon': (start_lat, start_lng),
+                         'finish_lat_lon': (finish_lat, finish_lng),
+                         'distance': distance,
+                         'wind_speed': wind_speed,
+                         'wind_degree': wind_degree,
+                         'course_bearing':course_bearing,
+                         'boat_speed':boat_speed,
+                         'time':time}
         route_segments.append(route_segment)
         start_time = time
     return route_segments[-1]['time']
@@ -165,6 +167,7 @@ def calculate_true_wind_angle(heading, wind_degree):
 
 
 def get_most_recent_netcdf():
+    # TODO actually get the most recent netcdt currently returning the first
     os.chdir(Config.netcdf_dir)
     all_netcdfs = [file for file in glob.glob('*.nc')]
     os.chdir(Config.proj_dir)
