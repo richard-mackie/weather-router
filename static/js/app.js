@@ -44,19 +44,19 @@ L.easyButton('<img src="./static/images/watch.svg">', function() {
             type: "POST",
             contentType: "application/json",
             data: JSON.stringify(lines)
-        }).then(function (time) {
+        }).then(function (data) {
             $.ajax({
                 url: "/process_user_route",
                 type: "GET",
-                data: JSON.stringify(time),
+                data: JSON.stringify(data),
                 dataType: "json",
-                success: show_users_time(time)
+                success: show_user_route_time(data['route_time'])
             })
         });
     } else {
         alert('Create a route to submit');
     }
-}, 'Calculate Route Time').addTo(map);
+}, 'Calculate Created Route Time').addTo(map);
 
 // Add submit routes button to the leaflet. Sends the data back to flask as a json.
 L.easyButton('<img src="./static/images/navigation.svg">', function() {
@@ -74,22 +74,24 @@ L.easyButton('<img src="./static/images/navigation.svg">', function() {
             url: '/calculate_optimal_route',
             type: "POST",
             contentType: "application/json",
+            beforeSend :function(){
+                return confirm('Calculating the optimal route. This may take up to ' + JSON.stringify(timeout) + ' seconds.');},
             data: JSON.stringify(lines)
-        }).then(function (test) {
+        }).then(function (data) {
             $.ajax({
                 url: '/calculate_optimal_route',
                 type: "GET",
-                data: JSON.stringify(test),
+                data: JSON.stringify(data),
                 dataType: "json",
-                success: plot_astar_points(test)
-                // TODO Fix callback error
-                // TODO add feedback for user to wait
-            })
+                success: plot_astar_points(data['route'])
+            }).then(
+                show_optimal_route_time(data['route_time'])
+            )
         });
     } else {
         alert('Create a route to submit');
     }
-}, 'Create Optimal Route').addTo(map);
+}, 'Display Optimal Route & Time').addTo(map);
 
 //Takes wind data in the form of a json and plots windbarbs with a speed and direction on the map
 function plotWindBarbs(winddata){
@@ -190,8 +192,12 @@ function doStuff() {
     console.log($('.leaflet-control-layers-selector:checked'))
 }
 
-function show_users_time(time){
-    alert('Your route took ' + JSON.stringify(time['time']))
+function show_user_route_time(time){
+    alert('Your route took ' + JSON.stringify(time));
+}
+
+function show_optimal_route_time(time){
+    alert('The optimal route took ' + JSON.stringify(time));
 }
 
 function plot_isochrone(latlngs){
@@ -215,13 +221,11 @@ function plot_isochrone(latlngs){
 
 function plot_astar_points(latlngs){
     latlngs.forEach(function(point){
-        console.log(point)
         L.circle(point,{radius: 2}).addTo(map);
     });
 }
 
 function plot_astar_route(latlngs){
-    alert('Found it!');
     L.polyline(latlngs, {color: 'red', weight: 1, noClip: true, smoothFactor: 1}).addTo(map);
 }
 

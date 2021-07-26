@@ -6,6 +6,9 @@ class Config(object):
     # Minimum boat speed. Simulates boat speed when there is no wind.
     motoring_speed = 0
 
+    # Optimal route timeout
+    timeout = 17
+
     # Directory References
     netcdf_dir = './static/data/netcdf/'
     grib_dir = './static/data/gribs/'
