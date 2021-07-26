@@ -12,14 +12,22 @@ var map = L.map('map',{
     layers: [openStreetsMap]
 }).setView([35.5, -136.5], 5);
 
-let polylineMeasure = L.control.polylineMeasure ({position:'topleft', unit:'nauticalmiles', showBearings:true, clearMeasurementsOnStop: false, showClearControl: true, showUnitControl: false})
+let polylineMeasure = L.control.polylineMeasure ({
+    position:'topleft',
+    unit:'nauticalmiles',
+    showBearings:true,
+    clearMeasurementsOnStop: false,
+    showClearControl: true,
+    showUnitControl: false,
+    measureControlTitleOn: 'Create Route',
+    measureControlTitleOff: 'End Route',
+    clearControlTitle: 'Clear Routes'})
 polylineMeasure.addTo(map);
 
-// TODO Change anchor to something better
 // TODO limit the start and stopping submissions
 
 // Add submit routes button to the leaflet. Sends the data back to flask as a json.
-L.easyButton('<img src="./static/images/anchor.svg">',function() {
+L.easyButton('<img src="./static/images/watch.svg">', function() {
     // This holds all of the polylines
     var polydata = polylineMeasure._arrPolylines;
     // Each line is a route the user created
@@ -48,10 +56,10 @@ L.easyButton('<img src="./static/images/anchor.svg">',function() {
     } else {
         alert('Create a route to submit');
     }
-}).addTo(map);
+}, 'Calculate Route Time').addTo(map);
 
 // Add submit routes button to the leaflet. Sends the data back to flask as a json.
-L.easyButton('<img src="./static/images/check-square.svg">', function() {
+L.easyButton('<img src="./static/images/navigation.svg">', function() {
     // This holds all of the polylines
     var polydata = polylineMeasure._arrPolylines;
     // Each line is a route the user created
@@ -81,7 +89,7 @@ L.easyButton('<img src="./static/images/check-square.svg">', function() {
     } else {
         alert('Create a route to submit');
     }
-}).addTo(map);
+}, 'Create Optimal Route').addTo(map);
 
 //Takes wind data in the form of a json and plots windbarbs with a speed and direction on the map
 function plotWindBarbs(winddata){

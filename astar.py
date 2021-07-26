@@ -1,6 +1,5 @@
 import heapq
 import time
-
 import mercantile
 import numpy as np
 import utils
@@ -31,16 +30,17 @@ class PriorityQueue:
         return heapq.heappop(self.heap)
 
 class Node:
-    def __init__(self, lat, lng, time=0, parent=None, heading=0, distance_to_finish=0, distance_traveled=0):
+    def __init__(self, lat, lng, time=0, parent=None, heading=0, distance_to_finish=0, distance_traveled=0, average_vmg=0):
         self.lat = lat
         self.lng = lng
         # This creates a semi unique identifier. Same as the index for slippy maps
         # https://wiki.openstreetmap.org/wiki/Slippy_map_tilenames
-        self.grid_location = mercantile.tile(self.lat, self.lng, zoom=12)
+        self.grid_location = mercantile.tile(self.lat, self.lng, zoom=16) # 14 shows good resolution, 12 clips
         self.time = time
         self.parent = parent
         self.heading = heading
         self.distance_traveled = distance_traveled
+        self.average_vmg = average_vmg
         self.distance_to_finish = distance_to_finish
 
 def vmg(node, speed, finish_bearing, true_wind_angle):
@@ -50,7 +50,7 @@ def vmg(node, speed, finish_bearing, true_wind_angle):
     vmg = speed * np.cos(np.radians(true_wind_angle))
     return vmg
 
-def astar_optimal_route(start, finish, timeout=10, max_steps=10000):
+def astar_optimal_route(start, finish, timeout=10, max_steps=1000):
     # These are latlon tuples for display purposes only, they show the explored areas
     leaflet_points = []
     # This gives a way to end the search, nice for debugging
@@ -67,9 +67,12 @@ def astar_optimal_route(start, finish, timeout=10, max_steps=10000):
     visited = {start_node.grid_location: None}
     cost_so_far = {start_node: 0}
     start_time = time.time()
+    decay = 1
 
     while not frontier.empty() and step < max_steps:
-        current_node = frontier.pop()[-1]
+        current = frontier.pop()
+        print(current)
+        current_node = current[-1]
         wind_speed = wind_data.sel(latitude=current_node.lat,
                                    longitude=current_node.lng,
                                    method='nearest')['speed'].values.item()
@@ -93,7 +96,7 @@ def astar_optimal_route(start, finish, timeout=10, max_steps=10000):
             print('Optimal Path', utils.get_wind_speed_and_degree_for_routes(routes=[route]))
             return leaflet_points
 
-        for heading in [deg for deg in range(0, 361, 1)]:
+        for heading in [deg for deg in range(0, 361, 5)]:
             true_wind_angle = calculate_true_wind_angle(heading, wind_degree)
             speed = max(get_boat_speed(true_wind_angle, wind_speed), Config.motoring_speed)
             distance = speed * hours_of_travel
@@ -102,7 +105,13 @@ def astar_optimal_route(start, finish, timeout=10, max_steps=10000):
                                                       lats=current_node.lat,
                                                       az=heading,
                                                       dist=distance * 1852)
+
             azimuth1, azimuth2, dist_finish = Config.globe.inv(lats1=finish_node.lat, lons1=finish_node.lng, lats2=lat, lons2=lng)
+
+            vmg = speed * np.cos(np.radians(heading - wind_degree))
+
+            if true_wind_angle >= 45:
+                vmg *= -1
 
             node = Node(lat=lat,
                         lng=lng,
@@ -110,19 +119,23 @@ def astar_optimal_route(start, finish, timeout=10, max_steps=10000):
                         parent=current_node,
                         distance_traveled=current_node.distance_traveled + distance,
                         heading=heading,
-                        distance_to_finish=dist_finish
-                        )
+                        distance_to_finish=dist_finish,
+                        average_vmg = vmg)
 
             #print('Heading: {} True Wind Angle: {} VMG: {} Distance{}'.format(node.heading, true_wind_angle, vmg,
             #                                                                  distance))
 
             if node.grid_location not in cost_so_far or node.time < cost_so_far[node.grid_location]:
                 cost_so_far[node.grid_location] = node.time
-                # vmg = speed * np.cos(np.radians(true_wind_angle))
+
+                #print(heading, vmg)
                 #TODO come up with a better heuristic
-                frontier.push(((node.time * 100000) - (node.distance_to_finish * 10) - (speed * 1000), step, heading, node))
+                #frontier.push((vmg/( -.01 * node.distance_to_finish), vmg, node.distance_to_finish, step, heading, node))
+                frontier.push((1000 * node.time + .1 * node.distance_to_finish + .8 * node.average_vmg, step, heading, node))
+                #frontier.push(((node.time * 100000) + (node.distance_to_finish * 1000) + (speed * 10000), step, heading, node))
                 visited[node] = current_node
                 leaflet_points.append((node.lat, node.lng))
+                decay *= .999
 
         step += 1
 

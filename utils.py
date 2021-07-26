@@ -154,6 +154,7 @@ def get_wind_speed_and_degree_for_routes(routes):
 
 def calculate_true_wind_angle(heading, wind_degree):
     '''
+    This returns the true
     :param heading: This is the course the route is define by
     :param wind_degree: This is the compass heading in degrees of the wind
     :return: The shortest true wind angle
