@@ -4,7 +4,7 @@ class Config(object):
     extents = { 'lat': 52.56928286558243, 'lng': -95.88867187500001 }, { 'lat': 17.26672782352052, 'lng': -177.09960937500003 }
 
     # Minimum boat speed. Simulates boat speed when there is no wind.
-    motoring_speed = 0
+    motoring_speed = 0.001
 
     # Optimal route timeout
     timeout = 17

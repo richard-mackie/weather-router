@@ -4,23 +4,21 @@
     <title>Weather Route Training Simulator</title>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/styles/default.min.css">
-    <link rel="stylesheet" href="https://ppete2.github.io/Leaflet.PolylineMeasure/Leaflet.PolylineMeasure.css" />
-    <script type=text/css src="{{url_for('static', filename='./js/plugins/Leaflet.PolylineMeasure/Leaflet.PolylineMeasure.css')}}"></script>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet-easybutton@2/src/easy-button.css">
-
-
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" integrity="sha512-xodZBNTC5n17Xt2atTPuE1HxjVMSvLVW9ocqUKLsCC5CXdbqCmblAshOMAS6/keqq/sMZMZ19scR4PsZChSR7A==" crossorigin=""/>
+    <link rel=stylesheet href="{{url_for('static', filename='./js/plugins/Leaflet.PolylineMeasure/Leaflet.PolylineMeasure.css')}}">
+    <link rel=stylesheet href="{{ url_for('static', filename='./js/plugins/Leaflet.EasyButton/src/easy-button.css') }}"/>
+    <link rel=stylesheet href="{{ url_for('static', filename='./css/style.css') }}"/>
 </head>
 
 <body style="padding: 0; margin: 0; height: 100%; width: 100%;">
     <div id="map" style="height: 100%; width: 100%"></div>
     <script src="https://code.jquery.com/jquery-3.6.0.js" integrity="sha256-H+K7U5CnXl1h5ywQfKtSj8PCmoN9aaq30gDh27Xc0jk=" crossorigin="anonymous"></script>
     <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.js" integrity="sha256-T0Vest3yCU7pafRw9r+settMBX6JkKN06dqBnpQ8d30=" crossorigin="anonymous"></script>
-    <script type="text/javascript" src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js" integrity="sha512-XQoYMqMTK8LvdxXYG3nZ448hOEQiglfqkJs1NOQV44cWnUrBc8PkAOcXy20w0vlaXaVUearIOBhiXZ5V3ynxwA==" crossorigin=""></script>
     <script type=text/javascript src="{{url_for('static', filename='./js/plugins/Leaflet.windbarb/src/leaflet-windbarb.js')}}"></script>
     <script type=text/javascript src="{{url_for('static', filename='./js/plugins/Leaflet.PolylineMeasure/Leaflet.PolylineMeasure.js')}}"></script>
-    <script src="https://cdn.jsdelivr.net/npm/leaflet-easybutton@2/src/easy-button.js"></script>
+    <script type=text/javascript src="{{url_for('static', filename='./js/plugins/Leaflet.EasyButton/src/easy-button.js')}}"></script>
+
 
     <script>
         let maxBounds = L.latLngBounds({{ extents|tojson }});

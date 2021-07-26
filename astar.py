@@ -84,9 +84,14 @@ def astar_optimal_route(start, finish, max_steps=10000, debug=False):
             # This is the optimal route
             route = []
             # Traverse the nodes and rebuild the path
+            previous  =  None
             current = current_node
-            while current.parent != None:
-                route.append({'lat': current.lat, 'lng':current.lng})
+
+            while current != None:
+                # We don't need to display small changes in the optimal route heading to the users
+                if len(route) == 0 or abs(previous.heading - current.heading) > 10:
+                    route.append({'lat': current.lat, 'lng':current.lng})
+                previous = current
                 current = current.parent
             route = route[::-1]
             route_time = utils.get_wind_speed_and_degree_for_routes(routes=[route])

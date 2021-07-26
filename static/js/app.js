@@ -12,8 +12,10 @@ var map = L.map('map',{
     layers: [openStreetsMap]
 }).setView([35.5, -136.5], 5);
 
+// User Route
 let polylineMeasure = L.control.polylineMeasure ({
     position:'topleft',
+    measureControlLabel: '↯',
     unit:'nauticalmiles',
     showBearings:true,
     clearMeasurementsOnStop: false,
@@ -21,13 +23,13 @@ let polylineMeasure = L.control.polylineMeasure ({
     showUnitControl: false,
     measureControlTitleOn: 'Create Route',
     measureControlTitleOff: 'End Route',
-    clearControlTitle: 'Clear Routes'})
+    clearControlTitle: 'Clear Created Routes',
+    clearControlClasses: []}
+)
 polylineMeasure.addTo(map);
 
-// TODO limit the start and stopping submissions
-
 // Add submit routes button to the leaflet. Sends the data back to flask as a json.
-L.easyButton('<img src="./static/images/watch.svg">', function() {
+L.easyButton('&#x23F1', function() {
     // This holds all of the polylines
     var polydata = polylineMeasure._arrPolylines;
     // Each line is a route the user created
@@ -59,7 +61,7 @@ L.easyButton('<img src="./static/images/watch.svg">', function() {
 }, 'Calculate Created Route Time').addTo(map);
 
 // Add submit routes button to the leaflet. Sends the data back to flask as a json.
-L.easyButton('<img src="./static/images/navigation.svg">', function() {
+L.easyButton('&#x27A2', function() {
     // This holds all of the polylines
     var polydata = polylineMeasure._arrPolylines;
     // Each line is a route the user created
@@ -83,7 +85,7 @@ L.easyButton('<img src="./static/images/navigation.svg">', function() {
                 type: "GET",
                 data: JSON.stringify(data),
                 dataType: "json",
-                success: plot_astar_points(data['route'])
+                success: plot_astar_route_polymeasure(data['route'])
             }).then(
                 show_optimal_route_time(data['route_time'])
             )
@@ -92,6 +94,23 @@ L.easyButton('<img src="./static/images/navigation.svg">', function() {
         alert('Create a route to submit');
     }
 }, 'Display Optimal Route & Time').addTo(map);
+
+// Optimum route
+let polylineMeasure2 = L.control.polylineMeasure ({
+    position:'topleft',
+    unit:'nauticalmiles',
+    showBearings:false,
+    clearMeasurementsOnStop: false,
+    showClearControl: true,
+    showUnitControl: false,
+    clearControlTitle: 'Clear Optimum Route',
+    clearControlClasses: [],
+    fixedLine: {                    // Styling for the solid line
+        color: '#dc3620',              // Solid line color
+        weight: 2                   // Solid line weight
+    }})
+polylineMeasure2.addTo(map);
+polylineMeasure2._measureControl.remove();
 
 //Takes wind data in the form of a json and plots windbarbs with a speed and direction on the map
 function plotWindBarbs(winddata){
@@ -193,7 +212,7 @@ function doStuff() {
 }
 
 function show_user_route_time(time){
-    alert('Your route took ' + JSON.stringify(time));
+    alert('Your created route took ' + JSON.stringify(time));
 }
 
 function show_optimal_route_time(time){
@@ -225,8 +244,15 @@ function plot_astar_points(latlngs){
     });
 }
 
+function plot_astar_route_polymeasure(latlngs){
+
+    //console.log(latlngs);
+
+    polylineMeasure2.seed([latlngs])
+}
+
 function plot_astar_route(latlngs){
-    L.polyline(latlngs, {color: 'red', weight: 1, noClip: true, smoothFactor: 1}).addTo(map);
+    let optimum_route = L.polyline(latlngs, {color: 'red', weight: 1, noClip: true, smoothFactor: 1}).addTo(map);
 }
 
 function getBounds(bounds){

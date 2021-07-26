@@ -59,7 +59,6 @@ def isochrone_optimal_route(start, finish, max_steps=2):
 
     # Hours of travel for each step
     hours_of_travel = 3
-    # TODO correct how this is done. Currently skipping lots of data.
 
     # Calculate all the potential positions the boat could be in one time step
     for step in range(max_steps):
