@@ -97,7 +97,9 @@ def astar_optimal_route(start, finish, max_steps=10000):
             if Config.debug:
                 print('Route:', route)
                 print('Optimal Path Time', route_time)
-            return list(leaflet_points), route_time
+                return list(leaflet_points), route_time
+
+            return route, route_time
 
         for heading in [deg for deg in range(0, 361, 1)]:
             true_wind_angle = calculate_true_wind_angle(heading, wind_degree)
@@ -123,8 +125,9 @@ def astar_optimal_route(start, finish, max_steps=10000):
 
             node = Node(lat=lat,
                         lng=lng,
-                        time=hours_of_travel + current_node.time,
-                        cost=vmg,
+                        time=current_node.time + hours_of_travel,
+                        # cost=(1 / (current_node.time + hours_of_travel)), This is basically Uniform Cost / Dijkstra’s Algorithm
+                        cost=(1 / (current_node.time + hours_of_travel)) * (1/dist_finish**1.25),
                         parent=current_node,
                         distance_traveled=current_node.distance_traveled + distance,
                         heading=heading,
@@ -132,7 +135,7 @@ def astar_optimal_route(start, finish, max_steps=10000):
                         average_vmg = current_node.average_vmg + vmg)
 
             # TODO add the update for lower costs
-            if node.grid_location not in explored:
+            if node.grid_location not in explored and vmg > 0:
                 explored[node.grid_location] = node
                 # larger negative take priority
                 frontier.push((-node.cost, id(node), node))
