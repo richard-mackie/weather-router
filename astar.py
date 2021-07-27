@@ -127,7 +127,7 @@ def astar_optimal_route(start, finish, max_steps=10000):
                         lng=lng,
                         time=current_node.time + hours_of_travel,
                         # cost=(1 / (current_node.time + hours_of_travel)), This is basically Uniform Cost / Dijkstra’s Algorithm
-                        cost=(1 / (current_node.time + hours_of_travel)) * (1/dist_finish**1.25),
+                        cost=(1 / (current_node.time + hours_of_travel)) * (1/dist_finish**1.4),
                         parent=current_node,
                         distance_traveled=current_node.distance_traveled + distance,
                         heading=heading,
@@ -135,7 +135,8 @@ def astar_optimal_route(start, finish, max_steps=10000):
                         average_vmg = current_node.average_vmg + vmg)
 
             # TODO add the update for lower costs
-            if node.grid_location not in explored and vmg > 0:
+            # By restricting to only positive vmg of speed ratios we are headed at least towards the desitnation
+            if node.grid_location not in explored and vmg/speed >= .2:
                 explored[node.grid_location] = node
                 # larger negative take priority
                 frontier.push((-node.cost, id(node), node))
