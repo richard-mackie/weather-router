@@ -3,7 +3,6 @@ import time
 import mercantile
 import numpy as np
 import utils
-import datetime
 from config import Config
 from utils import get_most_recent_netcdf, get_boat_speed, calculate_true_wind_angle
 
@@ -31,22 +30,23 @@ class PriorityQueue:
         return heapq.heappop(self.heap)
 
 class Node:
-    def __init__(self, lat, lng, time=0, parent=None, heading=0, distance_to_finish=0, distance_traveled=0, average_vmg=0):
+    def __init__(self, lat, lng, time=0, parent=None, heading=0, distance_to_finish=0, distance_traveled=0, average_vmg=0, cost=0):
         self.lat = lat
         self.lng = lng
         # This creates a semi unique identifier. Same as the index for slippy maps
         # https://wiki.openstreetmap.org/wiki/Slippy_map_tilenames
         self.grid_location = mercantile.tile(self.lat, self.lng, zoom=14) # 14 shows good resolution, 12 clips
         self.time = time
+        self.cost = cost
         self.parent = parent
         self.heading = heading
         self.distance_traveled = distance_traveled
         self.average_vmg = average_vmg
         self.distance_to_finish = distance_to_finish
 
-def astar_optimal_route(start, finish, max_steps=10000, debug=False):
+def astar_optimal_route(start, finish, max_steps=1):
     # These are latlon tuples for display purposes only, they show the explored areas
-    leaflet_points = []
+    leaflet_points = set()
     # This gives a way to end the search, nice for debugging
     step = 0
     hours_of_travel = 1
@@ -58,92 +58,90 @@ def astar_optimal_route(start, finish, max_steps=10000, debug=False):
 
     frontier = PriorityQueue()
     frontier.push((0, start_node))
-    cost_so_far = {start_node: 0}
+
+    explored = {start_node.grid_location: start_node}
 
     start_time = time.time()
     while not frontier.empty() and step < max_steps:
         current = frontier.pop()
-        #print(current)
         current_node = current[-1]
         wind_speed = wind_data.sel(latitude=current_node.lat,
                                    longitude=current_node.lng,
                                    method='nearest')['speed'].values.item()
+
         wind_degree = wind_data.sel(latitude=current_node.lat,
                                     longitude=current_node.lng,
                                     method='nearest')['degree'].values.item()
-
+        # Timed Out Exit
         if time.time() > start_time + Config.timeout:
-
-            if debug == True:
+            if Config.debug:
                 print('No route found')
-                return leaflet_points, datetime.timedelta(days=999)
-            else:
-                return leaflet_points[0], datetime.timedelta(days=999)
+                return list(leaflet_points), 'Not Found'
 
+            print('No route found')
+            return [list(leaflet_points)[0]], 'Error: Not Found'
+
+        # Check if the finish has been reached.
         elif current_node.grid_location == finish_node.grid_location:
             # This is the optimal route
             route = []
             # Traverse the nodes and rebuild the path
-            previous  =  None
             current = current_node
-
             while current != None:
-                # We don't need to display small changes in the optimal route heading to the users
-                if len(route) == 0 or abs(previous.heading - current.heading) > 10:
-                    route.append({'lat': current.lat, 'lng':current.lng})
-                previous = current
+                route.append({'lat': current.lat, 'lng':current.lng})
                 current = current.parent
-            route = route[::-1]
-            route_time = utils.get_wind_speed_and_degree_for_routes(routes=[route])
-            print('Optimal Path', route_time)
-            return route, route_time
 
-        for heading in [deg for deg in range(0, 361, 10)]:
+            # Reverse to make sure this route has the same start and finish as the users drawn route
+            route = route[::-1]
+            route_time = utils.get_route_time(routes=[route])
+            if Config.debug:
+                print('Route:', route)
+                print('Optimal Path Time', route_time)
+            return list(leaflet_points), route_time
+
+        for heading in [deg for deg in range(0, 361, 1)]:
             true_wind_angle = calculate_true_wind_angle(heading, wind_degree)
             speed = max(get_boat_speed(true_wind_angle, wind_speed), Config.motoring_speed)
-            distance = speed * hours_of_travel
+            distance = speed * hours_of_travel * 1852
 
             # Get the new location for traveling at speed for 1 hour. Polars are in nautical miles. fwd takes meters.
-            lng, lat, back_azimuth = Config.globe.fwd(lons=current_node.lng,
+            # https://pyproj4.github.io/pyproj/stable/api/geod.html
+            lng, lat, _ = Config.globe.fwd(lons=current_node.lng,
                                                       lats=current_node.lat,
                                                       az=heading,
-                                                      dist=distance * 1852)
+                                                      dist=distance)
 
-            azimuth1, azimuth2, dist_finish = Config.globe.inv(lats1=finish_node.lat, lons1=finish_node.lng, lats2=lat, lons2=lng)
-            vmg = speed * np.cos(np.radians(heading - azimuth1))
+            finish_bearing, x, dist_finish = Config.globe.inv(lats1=lat,
+                                                               lons1=lng,
+                                                               lats2=finish_node.lat,
+                                                               lons2=finish_node.lng)
+
+            # If the true wind angle is greater than 90 then we are headed downwind
+            # http://lagoon-inside.com/en/faster-thanks-to-the-vmg-concept/
+            vmg = speed * np.cos(np.radians(finish_bearing - heading))
+            print(heading, finish_bearing, finish_bearing - heading, vmg)
 
             node = Node(lat=lat,
                         lng=lng,
                         time=hours_of_travel + current_node.time,
+                        cost=(current_node.average_vmg + vmg ) / dist_finish,
                         parent=current_node,
                         distance_traveled=current_node.distance_traveled + distance,
                         heading=heading,
                         distance_to_finish=dist_finish,
-                        average_vmg = current_node.average_vmg + vmg)
+                        average_vmg = current_node.average_vmg + abs(vmg))
 
-            #print('Heading: {} True Wind Angle: {} VMG: {} Distance{}'.format(node.heading, true_wind_angle, vmg, distance))
-
-            if node.grid_location not in cost_so_far or node.time < cost_so_far[node.grid_location]:
-                cost_so_far[node.grid_location] = node.time
-                #TODO come up with a better heuristic
-
-                # This goes stright for the goal
-                #frontier.push((node.distance_to_finish, step, heading, node))
-
-                # This is working when there are no obstacles
-                #frontier.push(((node.average_vmg / node.time) / node.distance_to_finish, step, heading, node))
-
-                # Look for good wind!
-                frontier.push(((node.average_vmg / node.time) / node.distance_to_finish, step, heading, node))
-
-                # This is working when there are no obstacles
-                #frontier.push(((node.average_vmg / node.time), step, heading, node))
-                leaflet_points.append((node.lat, node.lng))
+            # TODO add the update for lower costs
+            if node.grid_location not in explored:
+                explored[node.grid_location] = node
+                frontier.push((node.cost, id(node), node))
+                leaflet_points.add((node.lat, node.lng))
 
         step += 1
 
-    return leaflet_points
+    return list(leaflet_points), 'Frontier Empty or Steps exceeded'
 
-
+# TODO Fix discrepancy between user drawn time and optimal route
+# TODO fix heuristic
 
 

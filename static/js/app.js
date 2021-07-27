@@ -28,7 +28,7 @@ let polylineMeasure = L.control.polylineMeasure ({
 )
 polylineMeasure.addTo(map);
 
-// Add submit routes button to the leaflet. Sends the data back to flask as a json.
+// Calculate the User route
 L.easyButton('&#x23F1', function() {
     // This holds all of the polylines
     var polydata = polylineMeasure._arrPolylines;
@@ -60,7 +60,7 @@ L.easyButton('&#x23F1', function() {
     }
 }, 'Calculate Created Route Time').addTo(map);
 
-// Add submit routes button to the leaflet. Sends the data back to flask as a json.
+// Calculate the Optimum Route
 L.easyButton('&#x27A2', function() {
     // This holds all of the polylines
     var polydata = polylineMeasure._arrPolylines;
@@ -85,7 +85,7 @@ L.easyButton('&#x27A2', function() {
                 type: "GET",
                 data: JSON.stringify(data),
                 dataType: "json",
-                success: plot_astar_route_polymeasure(data['route'])
+                success: plot_astar_points(data['route']) // TODO config this. If debugging use plot_astar_points otherwise use plot_astar_route
             }).then(
                 show_optimal_route_time(data['route_time'])
             )
@@ -244,15 +244,9 @@ function plot_astar_points(latlngs){
     });
 }
 
-function plot_astar_route_polymeasure(latlngs){
-
-    //console.log(latlngs);
-
-    polylineMeasure2.seed([latlngs])
-}
-
 function plot_astar_route(latlngs){
-    let optimum_route = L.polyline(latlngs, {color: 'red', weight: 1, noClip: true, smoothFactor: 1}).addTo(map);
+    //console.log(latlngs);
+    polylineMeasure2.seed([latlngs])
 }
 
 function getBounds(bounds){

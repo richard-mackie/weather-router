@@ -111,7 +111,7 @@ def get_boat_speed(true_wind_angle, wind_speed, np_polars=polar_diagram):
     return np_polars[row_index][col_index]
 
 
-def get_wind_speed_and_degree_for_routes(routes):
+def get_route_time(routes):
     # This holds the wind degree and speed
     wind_data = get_most_recent_netcdf()
     route = routes[0]
@@ -128,12 +128,13 @@ def get_wind_speed_and_degree_for_routes(routes):
         azimuth1, azimuth2, distance = Config.globe.inv(start_lng, start_lat, finish_lng, finish_lat)
         # Convert distance(meters) to nautical miles
         distance *= 0.000539957
-        course_bearing = azimuth2 + 180
+
+        heading = azimuth2 + 180
 
         wind_speed = wind_data.sel(latitude=start_lat, longitude=start_lng, method='nearest')['speed'].values.item()
         wind_degree = wind_data.sel(latitude=start_lat, longitude=start_lng, method='nearest')['degree'].values.item()
 
-        true_wind_angle = calculate_true_wind_angle(course_bearing, wind_degree)
+        true_wind_angle = calculate_true_wind_angle(heading, wind_degree)
         boat_speed = get_boat_speed(true_wind_angle, wind_speed)
 
         # This gives us a minimum boat speed of 1 knot, the polar diagrams are not completely filled out.
@@ -144,7 +145,7 @@ def get_wind_speed_and_degree_for_routes(routes):
                          'distance': distance,
                          'wind_speed': wind_speed,
                          'wind_degree': wind_degree,
-                         'course_bearing':course_bearing,
+                         'heading':heading,
                          'boat_speed':boat_speed,
                          'time':time}
         route_segments.append(route_segment)

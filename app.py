@@ -1,3 +1,5 @@
+import datetime
+
 from flask import Flask, render_template, jsonify, request, make_response
 
 import astar
@@ -15,7 +17,7 @@ def index():
 @app.route('/process_user_route', methods=['GET','POST'])
 def process():
     routes = request.get_json()
-    route_time = utils.get_wind_speed_and_degree_for_routes(routes=routes)
+    route_time = utils.get_route_time(routes=routes)
     string_time = '{} days {} hours {} minutes'.format(route_time.days, route_time.seconds//3600, (route_time.seconds//60) % 60)
     res = make_response(jsonify({'route_time': string_time}), 200)
     return res
@@ -26,8 +28,11 @@ def router():
     start = routes[0][0]
     finish = routes[0][-1]
     optimal_route, route_time = astar.astar_optimal_route(start, finish)
-    string_time = '{} days {} hours {} minutes'.format(route_time.days, route_time.seconds // 3600, (route_time.seconds // 60) % 60)
-    res = make_response(jsonify({'route': optimal_route, 'route_time': string_time}), 200)
+    if isinstance(route_time, datetime.timedelta):
+        route_time = '{} days {} hours {} minutes'.format(route_time.days, route_time.seconds // 3600, (route_time.seconds // 60) % 60)
+    else:
+        route_time = 'Not Found'
+    res = make_response(jsonify({'route': optimal_route, 'route_time': route_time}), 200)
     return res
 
 if __name__ == '__main__':
