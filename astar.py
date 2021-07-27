@@ -35,7 +35,7 @@ class Node:
         self.lng = lng
         # This creates a semi unique identifier. Same as the index for slippy maps
         # https://wiki.openstreetmap.org/wiki/Slippy_map_tilenames
-        self.grid_location = mercantile.tile(self.lat, self.lng, zoom=14) # 14 shows good resolution, 12 clips
+        self.grid_location = mercantile.tile(self.lat, self.lng, zoom=10) # 14 shows good resolution, 12 clips
         self.time = time
         self.cost = cost
         self.parent = parent
@@ -44,12 +44,12 @@ class Node:
         self.average_vmg = average_vmg
         self.distance_to_finish = distance_to_finish
 
-def astar_optimal_route(start, finish, max_steps=1):
+def astar_optimal_route(start, finish, max_steps=10000):
     # These are latlon tuples for display purposes only, they show the explored areas
     leaflet_points = set()
     # This gives a way to end the search, nice for debugging
     step = 0
-    hours_of_travel = 1
+    hours_of_travel = 12
     # This holds the wind degree and speed
     wind_data = get_most_recent_netcdf()
 
@@ -119,29 +119,27 @@ def astar_optimal_route(start, finish, max_steps=1):
             # If the true wind angle is greater than 90 then we are headed downwind
             # http://lagoon-inside.com/en/faster-thanks-to-the-vmg-concept/
             vmg = speed * np.cos(np.radians(finish_bearing - heading))
-            print(heading, finish_bearing, finish_bearing - heading, vmg)
+            #print(heading, finish_bearing, finish_bearing - heading, vmg)
 
             node = Node(lat=lat,
                         lng=lng,
                         time=hours_of_travel + current_node.time,
-                        cost=(current_node.average_vmg + vmg ) / dist_finish,
+                        cost=vmg,
                         parent=current_node,
                         distance_traveled=current_node.distance_traveled + distance,
                         heading=heading,
                         distance_to_finish=dist_finish,
-                        average_vmg = current_node.average_vmg + abs(vmg))
+                        average_vmg = current_node.average_vmg + vmg)
 
             # TODO add the update for lower costs
             if node.grid_location not in explored:
                 explored[node.grid_location] = node
-                frontier.push((node.cost, id(node), node))
+                # larger negative take priority
+                frontier.push((-node.cost, id(node), node))
                 leaflet_points.add((node.lat, node.lng))
-
         step += 1
 
     return list(leaflet_points), 'Frontier Empty or Steps exceeded'
 
 # TODO Fix discrepancy between user drawn time and optimal route
 # TODO fix heuristic
-
-
