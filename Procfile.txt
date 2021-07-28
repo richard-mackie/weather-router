@@ -1,1 +1,1 @@
-web: gunicorn mweatherrouter:app.py
+web: gunicorn app:app
