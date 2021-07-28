@@ -1,4 +1,5 @@
 from pyproj import Geod
+import os
 
 class Config(object):
     # Prints some useful debugging messages to Terminal
@@ -18,7 +19,7 @@ class Config(object):
     netcdf_dir = './static/data/netcdf/'
     grib_dir = './static/data/gribs/'
     json_dir = './static/data/json/'
-    proj_dir = '/home/richard/PycharmProjects/mweatherrouter'
+    proj_dir = os.path.dirname(os.path.abspath(__file__))
     polar_diagram = './static/data/boat_polars/volvo65.txt'
 
     # Used for geodesic calculations such as distances and headings
