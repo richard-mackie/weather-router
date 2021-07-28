@@ -19,7 +19,7 @@ def create_wind_spd_deg_jsons_from_all_gribs(input_dir=Config.grib_dir, output_d
         print('There are no gribs in the input directory.')
     else:
         for filename in all_gribs:
-            ds = xarray.open_dataset(input_dir + filename, engine='cfgrib')
+            ds = xarray.open_dataset(input_dir + filename)
             # convert the 0-360 to -180 + 180
             ds = ds.assign_coords(longitude=(((ds.longitude + 180) % 360) - 180))
             # Need to do this for the wind speed lookup later
