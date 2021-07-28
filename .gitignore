@@ -139,9 +139,5 @@ cython_debug/
 # Pycharm
 .idea/
 
-/static/data/
-/static/js/plugins/
 
-static/js/plugins/Leaflet.TimeDimension
-static/js/plugins/Leaflet.windbarb
 
