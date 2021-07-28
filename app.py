@@ -1,13 +1,10 @@
 import datetime
-
 from flask import Flask, render_template, jsonify, request, make_response
-
 import astar
 import utils, json
 from config import Config
 
 app = Flask(__name__)
-
 
 @app.route('/', methods=['GET'])
 def index():
@@ -44,5 +41,3 @@ def router():
 if __name__ == '__main__':
     app.run(use_reloader=True, debug=True)
 
-# TODO publish to the web
-# TODO publish polar diagram
