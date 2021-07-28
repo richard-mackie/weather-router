@@ -19,7 +19,7 @@ class Config(object):
     grib_dir = './static/data/gribs/'
     json_dir = './static/data/json/'
     proj_dir = '/home/richard/PycharmProjects/mweatherrouter'
-    polar_diagram = './static/data/boat_polars/volvo65'
+    polar_diagram = './static/data/boat_polars/volvo65.txt'
 
     # Used for geodesic calculations such as distances and headings
     globe = Geod(ellps='clrk66')  # Use Clarke 1866 ellipsoid.

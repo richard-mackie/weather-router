@@ -133,9 +133,11 @@ def get_route_time(routes):
 
         wind_speed = wind_data.sel(latitude=start_lat, longitude=start_lng, method='nearest')['speed'].values.item()
         wind_degree = wind_data.sel(latitude=start_lat, longitude=start_lng, method='nearest')['degree'].values.item()
-
         true_wind_angle = calculate_true_wind_angle(heading, wind_degree)
         boat_speed = get_boat_speed(true_wind_angle, wind_speed)
+
+        if Config.debug:
+            print('Boat Speed: {}, Heading: {}, TWA: {}, Wind Speed: {} Wind Degrees: {}'.format(boat_speed, heading, true_wind_angle, wind_speed, wind_degree))
 
         # This gives us a minimum boat speed of 1 knot, the polar diagrams are not completely filled out.
         time = start_time + datetime.timedelta(hours=distance/max(boat_speed, Config.motoring_speed))

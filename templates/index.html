@@ -21,6 +21,11 @@
 
 
     <script>
+        if (window.confirm('If this is your first visit click OK to watch the instructional video'))
+        {
+        window.open('https://drive.google.com/file/d/1XovKhJIk2oOz6tFAd6tJBgcKJE2sQltI/view?usp=sharing'
+            );
+        };
         let maxBounds = L.latLngBounds({{ extents|tojson }});
         let wind = {{ data|tojson }};
         let timeout = {{ timeout|tojson }};
