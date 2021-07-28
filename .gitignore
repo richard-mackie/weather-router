@@ -139,5 +139,9 @@ cython_debug/
 # Pycharm
 .idea/
 
+/static/data/gribs
+/static/data/json
+/static/data/netcdf
+
 
 

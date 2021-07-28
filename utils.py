@@ -2,6 +2,7 @@ import numpy as np
 import glob, os, time, requests, xarray, datetime
 from config import Config
 
+
 # Create the boat polar diagram for get_boat_speed_numpy function
 polar_diagram = np.genfromtxt(Config.polar_diagram, delimiter=';')
 # replace the nans with - inf
