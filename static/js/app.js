@@ -85,7 +85,7 @@ L.easyButton('&#x27A2', function() {
                 type: "GET",
                 data: JSON.stringify(data),
                 dataType: "json",
-                success: plot_astar_points(data['route']) // TODO config this. If debugging use plot_astar_points otherwise use plot_astar_route
+                success: plot_astar_route(data['route']) // TODO config this. If debugging use plot_astar_points otherwise use plot_astar_route
             }).then(
                 show_optimal_route_time(data['route_time'])
             )
@@ -187,14 +187,18 @@ var seattleToCabo = L.layerGroup([seattleStart, caboFinish]);
 var sfToHawaii = L.layerGroup([sfStart, hawaiiFinish]);
 var hawaiiToCabo = L.layerGroup([hawaiiStart, caboFinish]);
 var hawaiiToSeattle = L.layerGroup([hawaiiStart, seattleFinish]);
+var hawaiiToSf = L.layerGroup([hawaiiStart, sfFinish]);
+var CaboToHawaii = L.layerGroup([caboStart, hawaiiFinish]);
 
 var overlayMaps = {
     'Seattle to Hawaii': seattleToHawaii,
-    'Seattle to San Franciso': seattleToSf,
-    'Seattle to Cabo': seattleToCabo,
+    //'Seattle to San Franciso': seattleToSf,
+    //'Seattle to Cabo': seattleToCabo,
     'San Francisco to Hawaii': sfToHawaii,
-    'Hawaii to Cabo': hawaiiToCabo,
-    'Hawaii to Seattle': hawaiiToSeattle
+    'Cabo San Lucas to Hawaii':CaboToHawaii,
+    'Hawaii to Seattle': hawaiiToSeattle,
+    'Hawaii to San Francisco': hawaiiToSf,
+    'Hawaii to Cabo San Lucas': hawaiiToCabo,
     };
 
 L.control.layers(overlayMaps).addTo(map);
@@ -212,7 +216,7 @@ function doStuff() {
 }
 
 function show_user_route_time(time){
-    alert('Your created route took ' + JSON.stringify(time));
+    alert('Your last created route took ' + JSON.stringify(time));
 }
 
 function show_optimal_route_time(time){

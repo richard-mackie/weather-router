@@ -25,8 +25,8 @@ def process():
 @app.route('/calculate_optimal_route', methods=['GET','POST'])
 def router():
     routes = request.get_json()
-    start = routes[0][0]
-    finish = routes[0][-1]
+    start = routes[-1][0]
+    finish = routes[-1][-1]
     optimal_route, route_time = astar.astar_optimal_route(start, finish)
     if isinstance(route_time, datetime.timedelta):
         route_time = '{} days {} hours {} minutes'.format(route_time.days, route_time.seconds // 3600, (route_time.seconds // 60) % 60)

@@ -114,7 +114,7 @@ def get_boat_speed(true_wind_angle, wind_speed, np_polars=polar_diagram):
 def get_route_time(routes):
     # This holds the wind degree and speed
     wind_data = get_most_recent_netcdf()
-    route = routes[0]
+    route = routes[-1]
     route_segments = []
     start_time = datetime.timedelta(minutes=0, seconds=0)
 

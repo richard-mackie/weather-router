@@ -3,7 +3,7 @@ from pyproj import Geod
 class Config(object):
     # Prints some useful debugging messages to Terminal
     # Make sure to change the app.js plot for optimal route!!!
-    debug = True
+    debug = False
 
     # Optimal route timeout
     timeout = 30
