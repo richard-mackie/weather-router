@@ -143,5 +143,9 @@ cython_debug/
 /static/data/json/*
 /static/data/netcdf/*
 
+!/static/data/gribs/.gitkeep
+!/static/data/json/.gitkeep
+!/static/data/netcdf/.gitkeep
+
 
 
