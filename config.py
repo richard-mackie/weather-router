@@ -7,7 +7,7 @@ class Config(object):
     debug = False
 
     # Optimal route timeout
-    timeout = 45
+    timeout = 29
 
     # This is the mapping extent NorthEast Corner, SouthWest Corner
     extents = { 'lat': 52.56928286558243, 'lng': -95.88867187500001 }, { 'lat': 17.26672782352052, 'lng': -177.09960937500003 }
