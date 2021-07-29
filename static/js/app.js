@@ -79,13 +79,13 @@ L.easyButton('&#x27A2', function() {
             beforeSend :function(){
                 return confirm('Calculating the optimal route. This may take up to ' + JSON.stringify(timeout) + ' seconds.');},
             data: JSON.stringify(lines)
-        }).then(async function (data) {
+        }).then(function (data) {
             $.ajax({
                 url: '/calculate_optimal_route',
                 type: "GET",
                 data: JSON.stringify(data),
                 dataType: "json",
-                success: await plot_astar_route(data['route']) // TODO config this. If debugging use plot_astar_points otherwise use plot_astar_route
+                success: plot_astar_route(data['route']) // TODO config this. If debugging use plot_astar_points otherwise use plot_astar_route
             }).then(
                 show_optimal_route_time(data['route_time'])
             )
@@ -248,9 +248,9 @@ function plot_astar_points(latlngs){
     });
 }
 
-function plot_astar_route(latlngs){
+async function plot_astar_route(latlngs) {
     //console.log(latlngs);
-    polylineMeasure2.seed([latlngs])
+    await polylineMeasure2.seed([latlngs])
 }
 
 function getBounds(bounds){
