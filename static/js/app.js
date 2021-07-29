@@ -61,7 +61,7 @@ L.easyButton('&#x23F1', function() {
 }, 'Calculate Created Route Time').addTo(map);
 
 // Calculate the Optimum Route
-L.easyButton('&#x27A2', function() {
+L.easyButton('&#x27A2', async function() {
     // This holds all of the polylines
     var polydata = polylineMeasure._arrPolylines;
     // Each line is a route the user created
@@ -79,15 +79,15 @@ L.easyButton('&#x27A2', function() {
             beforeSend :function(){
                 return confirm('Calculating the optimal route. This may take up to ' + JSON.stringify(timeout) + ' seconds.');},
             data: JSON.stringify(lines)
-        }).then(function (data) {
+        }).then(async function (data) {
             $.ajax({
                 url: '/calculate_optimal_route',
                 type: "GET",
                 data: JSON.stringify(data),
                 dataType: "json",
-                success: plot_astar_route(data['route']) // TODO config this. If debugging use plot_astar_points otherwise use plot_astar_route
+                success: Promise.resolve('route').then(plot_astar_points(data['route'])) // TODO config this. If debugging use plot_astar_points otherwise use plot_astar_route
             }).then(
-                show_optimal_route_time(data['route_time'])
+                await show_optimal_route_time(data['route_time'])
             )
         });
     } else {
@@ -219,8 +219,8 @@ function show_user_route_time(time){
     alert('Your last created route took ' + JSON.stringify(time));
 }
 
-function show_optimal_route_time(time){
-    alert('The optimal route took ' + JSON.stringify(time));
+async function show_optimal_route_time(time) {
+    await alert('The optimal route took ' + JSON.stringify(time));
 }
 
 function plot_isochrone(latlngs){
@@ -242,7 +242,7 @@ function plot_isochrone(latlngs){
     });
 }
 
-function plot_astar_points(latlngs){
+async function plot_astar_points(latlngs){
     latlngs.forEach(function(point){
         L.circle(point,{radius: 2}).addTo(map);
     });
