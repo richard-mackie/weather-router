@@ -103,6 +103,7 @@ def get_jsons():
     return jsons
 
 
+# TODO create a version of that that store the speed in a cache.
 def get_boat_speed(true_wind_angle, wind_speed, np_polars=polar_diagram):
     # get the wind degree column
     degree = np_polars[:,0]

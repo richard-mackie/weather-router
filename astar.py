@@ -40,8 +40,6 @@ class Node:
         self.cost = cost
         self.parent = parent
         self.heading = heading
-        #self.distance_traveled = distance_traveled
-        #self.average_vmg = average_vmg
         self.distance_to_finish = distance_to_finish
 
 def astar_optimal_route(start, finish, max_steps=10000):
@@ -64,7 +62,6 @@ def astar_optimal_route(start, finish, max_steps=10000):
 
     frontier = PriorityQueue()
     frontier.push((0, start_node))
-
     explored = {start_node.grid_location: start_node}
 
     start_time = time.time()
@@ -84,8 +81,9 @@ def astar_optimal_route(start, finish, max_steps=10000):
                 print('No route found')
                 return list(leaflet_points), 'Not Found'
 
-            print('No route found')
-            return list(leaflet_points), 'Error: Not Found'
+            else:
+                print('No route found')
+                return [start], 'Error: Not Found'
 
         # Check if the finish has been reached.
         elif current_node.grid_location == finish_node.grid_location:
@@ -114,10 +112,11 @@ def astar_optimal_route(start, finish, max_steps=10000):
             headings = [deg for deg in range(0, 361, 10)]
 
         for heading in headings:
-            speed = max(get_boat_speed(calculate_true_wind_angle(heading, wind_degree), wind_speed), Config.motoring_speed)
+            # Get the new location for traveling at speed. Polars are in nautical miles. fwd takes meters.
+            true_wind_angle = calculate_true_wind_angle(heading, wind_degree)
+            speed = max(get_boat_speed(true_wind_angle, wind_speed), Config.motoring_speed)
             distance = speed * hours_of_travel * 1852
 
-            # Get the new location for traveling at speed for 1 hour. Polars are in nautical miles. fwd takes meters.
             # https://pyproj4.github.io/pyproj/stable/api/geod.html
             lng, lat, _ = Config.globe.fwd(lons=current_node.lng,
                                                       lats=current_node.lat,
@@ -129,21 +128,16 @@ def astar_optimal_route(start, finish, max_steps=10000):
                                                                lats2=finish_node.lat,
                                                                lons2=finish_node.lng)
 
-            # If the true wind angle is greater than 90 then we are headed downwind
             # http://lagoon-inside.com/en/faster-thanks-to-the-vmg-concept/
             vmg = speed * np.cos(np.radians(finish_bearing - heading))
-            #print(heading, finish_bearing, finish_bearing - heading, vmg)
+
             node = Node(lat=lat,
                         lng=lng,
                         time=current_node.time + hours_of_travel,
                         # cost=(1 / (current_node.time + hours_of_travel)), This is basically Uniform Cost / Dijkstra’s Algorithm
-                        #cost=(1 / (current_node.time + hours_of_travel)) * (1/dist_finish**1.4),
-                        cost=(1 / (current_node.time + hours_of_travel)) * (1 / dist_finish ** 1.4),
+                        cost=(1 / (current_node.time + hours_of_travel)) * (1 / dist_finish ** 1.3),
                         parent=current_node,
-                        #distance_traveled=current_node.distance_traveled + distance,
                         heading=heading,
-                        #distance_to_finish=dist_finish,
-                        #average_vmg = current_node.average_vmg + vmg)
             )
             if vmg / speed >= .3:
                 # By restricting to only positive vmg of speed ratios we are headed at least towards the desitnation
@@ -155,10 +149,7 @@ def astar_optimal_route(start, finish, max_steps=10000):
                         leaflet_points.add((node.lat, node.lng))
                 elif node.grid_location in explored and explored[node.grid_location].cost > node.cost:
                     explored[node.grid_location] = node
-                    # larger negative take priority
                     frontier.push((-node.cost, id(node), node))
-                    if Config.debug:
-                        leaflet_points.add((node.lat, node.lng))
         step += 1
 
     return [start], 'Frontier Empty or Steps exceeded'

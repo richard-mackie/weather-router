@@ -1,4 +1,4 @@
-// Restricting the area of the the map for display
+// Create the Map
 var openStreetsMap = L.tileLayer('http://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; ' + '<a href="http://openstreetmap.org">OpenStreetMap</a>' + ' Contributors',
     });
@@ -12,7 +12,7 @@ var map = L.map('map',{
     layers: [openStreetsMap]
 }).setView([35.5, -136.5], 5);
 
-// User Route
+// Allows plotting of User route
 let polylineMeasure = L.control.polylineMeasure ({
     position:'topleft',
     measureControlLabel: '↯',
@@ -28,7 +28,7 @@ let polylineMeasure = L.control.polylineMeasure ({
 )
 polylineMeasure.addTo(map);
 
-// Calculate the User route
+// Calculate the User route time
 L.easyButton('&#x23F1', function() {
     // This holds all of the polylines
     var polydata = polylineMeasure._arrPolylines;
@@ -68,10 +68,7 @@ L.easyButton('&#x27A2', function() {
     var lines = []
     for (i in polydata)
         lines.push(polydata[i].polylinePath._latlngs);
-    // Don't allow submission without the user creating a route
-    //https://stackoverflow.com/questions/53463808/jquery-ajax-call-inside-a-then-function
     if (lines.length > 0){
-        //console.log(polydata)
         $.ajax({
             url: '/calculate_optimal_route',
             type: "POST",
@@ -110,6 +107,7 @@ let polylineMeasure2 = L.control.polylineMeasure ({
         weight: 2                   // Solid line weight
     }})
 polylineMeasure2.addTo(map);
+// This hides the drawing portion of the Polyline measure
 polylineMeasure2._measureControl.remove();
 
 //Takes wind data in the form of a json and plots windbarbs with a speed and direction on the map
@@ -122,6 +120,52 @@ function plotWindBarbs(winddata){
     }
     });
 }
+
+function show_user_route_time(time){
+    alert('Your last created route took ' + JSON.stringify(time));
+}
+
+function show_optimal_route_time(time){
+    alert('The optimal route took ' + JSON.stringify(time));
+}
+
+// This is used for plotting isochrones. Not being used atm.
+function plot_isochrone(latlngs){
+    //console.log(latlngs)
+    var headings = latlngs[1].map(function(e, i) {
+      return [e, latlngs[0][i]];
+    });
+    latlngs.forEach(function(line){
+        //console.log(line[0])
+        L.polyline(line, {color: 'red', weight: 1, noClip: true, smoothFactor: 1}).addTo(map);
+        line.forEach(function (point){
+            //console.log(point)
+            L.circle(point,{radius: 2}).addTo(map);
+        });
+    });
+    //console.log(headings)
+    headings.forEach(function (heading){
+        L.polyline(heading, {color: 'red', weight: 1, noClip: true, smoothFactor: 1}).addTo(map);
+    });
+}
+
+// This is used for debugging
+function plot_astar_points(latlngs){
+    latlngs.forEach(function(point){
+        L.circle(point,{radius: 2}).addTo(map);
+    });
+}
+
+// This the final result
+function plot_astar_route(latlngs){
+    polylineMeasure2.seed([latlngs])
+}
+
+// Restricting the area of the the map for display
+function getBounds(bounds){
+    return bounds
+}
+
 
 // Starting Points
 var seattleStart = L.circle([48.5, -125.10],{
@@ -151,6 +195,7 @@ var hawaiiStart = L.circle([20.0, -155.05],{
     fillOpacity: 0.3,
     radius: 50000}
 ).bindPopup("Finish Line");
+
 
 // Finish Points
 var hawaiiFinish = L.circle([20.0, -155.05],{
@@ -200,7 +245,6 @@ var overlayMaps = {
     'Hawaii to San Francisco': hawaiiToSf,
     'Hawaii to Cabo San Lucas': hawaiiToCabo,
     };
-
 L.control.layers(overlayMaps).addTo(map);
 
 // TODO use selected layer to restrict the users to start and stop
@@ -208,60 +252,3 @@ map.on('baselayerchange', function (e) {
     console.log(e.layer);
 });
 
-function doStuff() {
-    //console.log(map.getBounds());
-    //console.log(start.latlng)
-    //console.log(finish.latlng)
-    console.log($('.leaflet-control-layers-selector:checked'))
-}
-
-function show_user_route_time(time){
-    alert('Your last created route took ' + JSON.stringify(time));
-}
-
-function show_optimal_route_time(time){
-    alert('The optimal route took ' + JSON.stringify(time));
-}
-
-function plot_isochrone(latlngs){
-    //console.log(latlngs)
-    var headings = latlngs[1].map(function(e, i) {
-      return [e, latlngs[0][i]];
-    });
-    latlngs.forEach(function(line){
-        //console.log(line[0])
-        L.polyline(line, {color: 'red', weight: 1, noClip: true, smoothFactor: 1}).addTo(map);
-        line.forEach(function (point){
-            //console.log(point)
-            L.circle(point,{radius: 2}).addTo(map);
-        });
-    });
-    //console.log(headings)
-    headings.forEach(function (heading){
-        L.polyline(heading, {color: 'red', weight: 1, noClip: true, smoothFactor: 1}).addTo(map);
-    });
-}
-
-function plot_astar_points(latlngs){
-    latlngs.forEach(function(point){
-        L.circle(point,{radius: 2}).addTo(map);
-    });
-}
-
-function plot_astar_route(latlngs){
-    //console.log(latlngs);
-    polylineMeasure2.seed([latlngs])
-}
-
-function getBounds(bounds){
-    return bounds
-}
-
-
-
-//;
-// Show Coordinates on click
-//map.on("contextmenu", function (event) {2
-//  console.log("Coordinates: " + event.latlng.toString());
-//  L.marker(event.latlng).addTo(map);
-//});
