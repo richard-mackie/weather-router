@@ -40,13 +40,14 @@ class Node:
         self.cost = cost
         self.parent = parent
         self.heading = heading
-        self.distance_traveled = distance_traveled
-        self.average_vmg = average_vmg
+        #self.distance_traveled = distance_traveled
+        #self.average_vmg = average_vmg
         self.distance_to_finish = distance_to_finish
 
 def astar_optimal_route(start, finish, max_steps=10000):
     # These are latlon tuples for display purposes only, they show the explored areas
-    leaflet_points = set()
+    if Config.debug:
+        leaflet_points = set()
     # This gives a way to end the search, nice for debugging
     step = 0
     hours_of_travel = 12
@@ -79,7 +80,7 @@ def astar_optimal_route(start, finish, max_steps=10000):
                 return list(leaflet_points), 'Not Found'
 
             print('No route found')
-            return [list(leaflet_points)[0]], 'Error: Not Found'
+            return [start], 'Error: Not Found'
 
         # Check if the finish has been reached.
         elif current_node.grid_location == finish_node.grid_location:
@@ -101,9 +102,8 @@ def astar_optimal_route(start, finish, max_steps=10000):
 
             return route, route_time
 
-        for heading in [deg for deg in range(0, 361, 2)]:
-            true_wind_angle = calculate_true_wind_angle(heading, wind_degree)
-            speed = max(get_boat_speed(true_wind_angle, wind_speed), Config.motoring_speed)
+        for heading in [deg for deg in range(0, 361, 3)]:
+            speed = max(get_boat_speed(calculate_true_wind_angle(heading, wind_degree), wind_speed), Config.motoring_speed)
             distance = speed * hours_of_travel * 1852
 
             # Get the new location for traveling at speed for 1 hour. Polars are in nautical miles. fwd takes meters.
@@ -122,17 +122,17 @@ def astar_optimal_route(start, finish, max_steps=10000):
             # http://lagoon-inside.com/en/faster-thanks-to-the-vmg-concept/
             vmg = speed * np.cos(np.radians(finish_bearing - heading))
             #print(heading, finish_bearing, finish_bearing - heading, vmg)
-
             node = Node(lat=lat,
                         lng=lng,
                         time=current_node.time + hours_of_travel,
                         # cost=(1 / (current_node.time + hours_of_travel)), This is basically Uniform Cost / Dijkstra’s Algorithm
                         cost=(1 / (current_node.time + hours_of_travel)) * (1/dist_finish**1.4),
                         parent=current_node,
-                        distance_traveled=current_node.distance_traveled + distance,
+                        #distance_traveled=current_node.distance_traveled + distance,
                         heading=heading,
-                        distance_to_finish=dist_finish,
-                        average_vmg = current_node.average_vmg + vmg)
+                        #distance_to_finish=dist_finish,
+                        #average_vmg = current_node.average_vmg + vmg)
+            )
 
             # TODO add the update for lower costs
             # By restricting to only positive vmg of speed ratios we are headed at least towards the desitnation
@@ -140,10 +140,17 @@ def astar_optimal_route(start, finish, max_steps=10000):
                 explored[node.grid_location] = node
                 # larger negative take priority
                 frontier.push((-node.cost, id(node), node))
-                leaflet_points.add((node.lat, node.lng))
+                if Config.debug:
+                    leaflet_points.add((node.lat, node.lng))
+            elif node.grid_location in explored and explored[node.grid_location].cost > node.cost:
+                explored[node.grid_location] = node
+                # larger negative take priority
+                frontier.push((-node.cost, id(node), node))
+                if Config.debug:
+                    leaflet_points.add((node.lat, node.lng))
         step += 1
 
-    return list(leaflet_points), 'Frontier Empty or Steps exceeded'
+    return [start], 'Frontier Empty or Steps exceeded'
 
 # TODO Fix discrepancy between user drawn time and optimal route
 # TODO fix heuristic
