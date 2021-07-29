@@ -4,10 +4,10 @@ import os
 class Config(object):
     # Prints some useful debugging messages to Terminal
     # Make sure to change the app.js plot for optimal route!!!
-    debug = True
+    debug = False
 
     # Optimal route timeout
-    timeout = 360
+    timeout = 28
 
     # This is the mapping extent NorthEast Corner, SouthWest Corner
     extents = { 'lat': 52.56928286558243, 'lng': -95.88867187500001 }, { 'lat': 17.26672782352052, 'lng': -177.09960937500003 }
