@@ -101,7 +101,7 @@ def astar_optimal_route(start, finish, max_steps=10000):
 
             return route, route_time
 
-        for heading in [deg for deg in range(0, 361, 1)]:
+        for heading in [deg for deg in range(0, 361, 2)]:
             true_wind_angle = calculate_true_wind_angle(heading, wind_degree)
             speed = max(get_boat_speed(true_wind_angle, wind_speed), Config.motoring_speed)
             distance = speed * hours_of_travel * 1852
