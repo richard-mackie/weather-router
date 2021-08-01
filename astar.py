@@ -28,9 +28,9 @@ class PriorityQueue:
 
     def pop(self):
         return heapq.heappop(self.heap)
-
+2
 class Node:
-    def __init__(self, lat, lng, time=0, parent=None, heading=0, distance_to_finish=0, distance_traveled=0, average_vmg=0, cost=0):
+    def __init__(self, lat, lng, time=0, parent=None, heading=0, distance_to_finish=0, cost=0):
         self.lat = lat
         self.lng = lng
         # This creates a semi unique identifier. Same as the index for slippy maps
@@ -48,6 +48,7 @@ def astar_optimal_route(start, finish, max_steps=10000):
         leaflet_points = set()
     # This gives a way to end the search, nice for debugging
     step = 0
+    # TODO this needs to be allowed to be a fraction
     hours_of_travel = 12
     # This holds the wind degree and speed
     wind_data = get_most_recent_netcdf()
@@ -63,6 +64,13 @@ def astar_optimal_route(start, finish, max_steps=10000):
     frontier = PriorityQueue()
     frontier.push((0, start_node))
     explored = {start_node.grid_location: start_node}
+
+    # Create the boat polar diagram for get_boat_speed_numpy function
+    polar_diagram = np.genfromtxt(Config.polar_diagram, delimiter=';')
+    # replace the nans with - inf
+    polar_diagram = np.nan_to_num(polar_diagram, nan=-np.inf)
+    # sort according to the first column, wind angle
+    polar_diagram = polar_diagram[np.argsort(polar_diagram[:, 0])]
 
     start_time = time.time()
     while not frontier.empty() and step < max_steps:
@@ -105,54 +113,56 @@ def astar_optimal_route(start, finish, max_steps=10000):
 
             return route, route_time
 
-        if current_node.distance_to_finish < total_distance_to_finish/2:
-            headings = [deg for deg in range(0, 361, 1)]
-
-        else:
-            headings = [deg for deg in range(0, 361, 10)]
-
-        for heading in headings:
+        for heading in[deg for deg in range(0, 361, 1)]:
             # Get the new location for traveling at speed. Polars are in nautical miles. fwd takes meters.
             true_wind_angle = calculate_true_wind_angle(heading, wind_degree)
-            speed = max(get_boat_speed(true_wind_angle, wind_speed), Config.motoring_speed)
+            speed = max(get_boat_speed(true_wind_angle, wind_speed, polar_diagram=polar_diagram), Config.motoring_speed)
             distance = speed * hours_of_travel * 1852
+            good_heading_component = np.cos(np.radians(finish_bearing - heading))
+            vmg = speed * good_heading_component
 
-            # https://pyproj4.github.io/pyproj/stable/api/geod.html
-            lng, lat, _ = Config.globe.fwd(lons=current_node.lng,
-                                                      lats=current_node.lat,
-                                                      az=heading,
-                                                      dist=distance)
+            if vmg > 0:
 
-            finish_bearing, x, dist_finish = Config.globe.inv(lats1=lat,
-                                                               lons1=lng,
-                                                               lats2=finish_node.lat,
-                                                               lons2=finish_node.lng)
+                # https://pyproj4.github.io/pyproj/stable/api/geod.html
+                lng, lat, _ = Config.globe.fwd(lons=current_node.lng,
+                                                          lats=current_node.lat,
+                                                          az=heading,
+                                                          dist=distance)
 
-            # http://lagoon-inside.com/en/faster-thanks-to-the-vmg-concept/
-            vmg = speed * np.cos(np.radians(finish_bearing - heading))
+                finish_bearing, x, dist_finish = Config.globe.inv(lats1=lat,
+                                                                   lons1=lng,
+                                                                   lats2=finish_node.lat,
+                                                                   lons2=finish_node.lng)
 
-            node = Node(lat=lat,
-                        lng=lng,
-                        time=current_node.time + hours_of_travel,
-                        # cost=(1 / (current_node.time + hours_of_travel)), This is basically Uniform Cost / Dijkstra’s Algorithm
-                        cost=(1 / (current_node.time + hours_of_travel)) * (1 / dist_finish ** 1.3),
-                        parent=current_node,
-                        heading=heading,
-            )
-            if vmg / speed >= .3:
+                # http://lagoon-inside.com/en/faster-thanks-to-the-vmg-concept/
+
+
+                node = Node(lat=lat,
+                            lng=lng,
+                            time=current_node.time + hours_of_travel,
+                            # larger negative take priority
+                            #cost=-(1 / (current_node.time + hours_of_travel)),# This is basically Uniform Cost / Dijkstra’s Algorithm
+                            #cost=-(vmg / (current_node.time + hours_of_travel)) * (1 / dist_finish ** 1.5),
+                            #cost=-(vmg/dist_finish), # This goes directly towards the finish
+                            #cost=-(vmg / (dist_finish + 1) * np.cos(np.radians(finish_bearing - heading)) * (current_node.time + hours_of_travel + 1 )),
+                            #cost=-(vmg*10 / ((1 * current_node.time + hours_of_travel) * (dist_finish**1.5))),
+                            cost=-(vmg*1)/dist_finish,
+                            parent=current_node,
+                            heading=heading,
+                            distance_to_finish=dist_finish
+                )
                 # By restricting to only positive vmg of speed ratios we are headed at least towards the desitnation
                 if node.grid_location not in explored:
                     explored[node.grid_location] = node
-                    # larger negative take priority
-                    frontier.push((-node.cost, id(node), node))
+                    frontier.push((node.cost, id(node), node))
                     if Config.debug:
                         leaflet_points.add((node.lat, node.lng))
-                elif node.grid_location in explored and explored[node.grid_location].cost > node.cost:
+                elif explored[node.grid_location].time > node.time:
                     explored[node.grid_location] = node
-                    frontier.push((-node.cost, id(node), node))
+                    frontier.push((node.cost, id(node), node))
         step += 1
 
-    return [start], 'Frontier Empty or Steps exceeded'
+    return [list(leaflet_points)], 'Frontier Empty or Steps exceeded'
 
 # TODO Fix discrepancy between user drawn time and optimal route
 # TODO fix heuristic

@@ -4,16 +4,16 @@ import os
 class Config(object):
     # Prints some useful debugging messages to Terminal
     # Make sure to change the app.js plot for optimal route!!!
-    debug = False
+    debug = True
 
     # Optimal route timeout
-    timeout = 28
+    timeout = 15
 
     # This is the mapping extent NorthEast Corner, SouthWest Corner
     extents = { 'lat': 52.56928286558243, 'lng': -95.88867187500001 }, { 'lat': 17.26672782352052, 'lng': -177.09960937500003 }
 
     # Minimum boat speed. Simulates boat speed when there is no wind.
-    motoring_speed = 1
+    motoring_speed = .0001
 
     # Directory References
     netcdf_dir = './static/data/netcdf/'

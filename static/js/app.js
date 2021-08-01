@@ -82,7 +82,7 @@ L.easyButton('&#x27A2', function() {
                 type: "GET",
                 data: JSON.stringify(data),
                 dataType: "json",
-                success: plot_astar_route(data['route']) // TODO config this. If debugging use plot_astar_points otherwise use plot_astar_route
+                success: plot_astar_points(data['route']) // TODO config this. If debugging use plot_astar_points otherwise use plot_astar_route
             }).then(
                 show_optimal_route_time(data['route_time'])
             )
