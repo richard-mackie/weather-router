@@ -28,7 +28,7 @@ class PriorityQueue:
 
     def pop(self):
         return heapq.heappop(self.heap)
-2
+
 class Node:
     def __init__(self, lat, lng, time=0, parent=None, heading=0, distance_to_finish=0, cost=0):
         self.lat = lat
@@ -118,39 +118,28 @@ def astar_optimal_route(start, finish, max_steps=10000):
             true_wind_angle = calculate_true_wind_angle(heading, wind_degree)
             speed = max(get_boat_speed(true_wind_angle, wind_speed, polar_diagram=polar_diagram), Config.motoring_speed)
             distance = speed * hours_of_travel * 1852
-            good_heading_component = np.cos(np.radians(finish_bearing - heading))
-            vmg = speed * good_heading_component
 
+            # http://lagoon-inside.com/en/faster-thanks-to-the-vmg-concept/
+            vmg = speed * np.cos(np.radians(finish_bearing - heading))
             if vmg > 0:
-
                 # https://pyproj4.github.io/pyproj/stable/api/geod.html
                 lng, lat, _ = Config.globe.fwd(lons=current_node.lng,
                                                           lats=current_node.lat,
                                                           az=heading,
                                                           dist=distance)
-
                 finish_bearing, x, dist_finish = Config.globe.inv(lats1=lat,
                                                                    lons1=lng,
                                                                    lats2=finish_node.lat,
                                                                    lons2=finish_node.lng)
-
-                # http://lagoon-inside.com/en/faster-thanks-to-the-vmg-concept/
-
-
                 node = Node(lat=lat,
                             lng=lng,
                             time=current_node.time + hours_of_travel,
                             # larger negative take priority
-                            #cost=-(1 / (current_node.time + hours_of_travel)),# This is basically Uniform Cost / Dijkstra’s Algorithm
-                            #cost=-(vmg / (current_node.time + hours_of_travel)) * (1 / dist_finish ** 1.5),
-                            #cost=-(vmg/dist_finish), # This goes directly towards the finish
-                            #cost=-(vmg / (dist_finish + 1) * np.cos(np.radians(finish_bearing - heading)) * (current_node.time + hours_of_travel + 1 )),
-                            #cost=-(vmg*10 / ((1 * current_node.time + hours_of_travel) * (dist_finish**1.5))),
-                            cost=-(vmg*1)/dist_finish,
+                            cost=-vmg / dist_finish,
                             parent=current_node,
                             heading=heading,
                             distance_to_finish=dist_finish
-                )
+                            )
                 # By restricting to only positive vmg of speed ratios we are headed at least towards the desitnation
                 if node.grid_location not in explored:
                     explored[node.grid_location] = node
