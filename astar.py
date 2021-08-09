@@ -48,7 +48,6 @@ def astar_optimal_route(start, finish, max_steps=10000):
         leaflet_points = set()
     # This gives a way to end the search, nice for debugging
     step = 0
-    # TODO this needs to be allowed to be a fraction
     hours_of_travel = 12
     # This holds the wind degree and speed
     wind_data = get_most_recent_netcdf()
@@ -88,7 +87,6 @@ def astar_optimal_route(start, finish, max_steps=10000):
             if Config.debug:
                 print('No route found')
                 return list(leaflet_points), 'Not Found'
-
             else:
                 print('No route found')
                 return [start], 'Error: Not Found'
@@ -110,19 +108,18 @@ def astar_optimal_route(start, finish, max_steps=10000):
                 print('Route:', route)
                 print('Optimal Path Time', route_time)
                 return list(leaflet_points), route_time
-
             return route, route_time
 
         for heading in[deg for deg in range(0, 361, 1)]:
             # Get the new location for traveling at speed. Polars are in nautical miles. fwd takes meters.
             true_wind_angle = calculate_true_wind_angle(heading, wind_degree)
             speed = max(get_boat_speed(true_wind_angle, wind_speed, polar_diagram=polar_diagram), Config.motoring_speed)
+            # TODO Fix edge case where distance overshoots
             distance = speed * hours_of_travel * 1852
-
             # http://lagoon-inside.com/en/faster-thanks-to-the-vmg-concept/
             vmg = speed * np.cos(np.radians(finish_bearing - heading))
+            # By restricting to only positive vmg of speed ratios we are headed at least towards the desitnation
             if vmg > 0:
-                # https://pyproj4.github.io/pyproj/stable/api/geod.html
                 lng, lat, _ = Config.globe.fwd(lons=current_node.lng,
                                                           lats=current_node.lat,
                                                           az=heading,
@@ -140,7 +137,7 @@ def astar_optimal_route(start, finish, max_steps=10000):
                             heading=heading,
                             distance_to_finish=dist_finish
                             )
-                # By restricting to only positive vmg of speed ratios we are headed at least towards the desitnation
+
                 if node.grid_location not in explored:
                     explored[node.grid_location] = node
                     frontier.push((node.cost, id(node), node))

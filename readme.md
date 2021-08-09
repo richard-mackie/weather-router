@@ -1,14 +1,16 @@
 ##Installation Instructions
 
-These are currently brief and intended to serve as guide my project mentor. 
-
 1) install eecodes version >= 2.22.1 
 https://confluence.ecmwf.int/display/ECC/Releases
 
-2) From the project folder in the terminal execute ```pip install requirements.txt```
+2) Create a new environment ```python3 -m venv mweatherrouter```
 
-3) From the project folder in the terminal execute ```flask run```
+3) Activate the new environment ```.\venv\Scripts\activate```
 
-4) In the browser navigate to http://127.0.0.1:5000/ 
+4) From the project folder in the terminal execute ```pip install -r requirements.txt```
 
-5) Click "OK" to watch the instructional video for details on how to use the application. 
+5) From the project folder in the terminal execute ```flask run```
+
+6) In the browser navigate to http://127.0.0.1:5000/ 
+
+7) Click "OK" to watch the instructional video for details on how to use the application. 
