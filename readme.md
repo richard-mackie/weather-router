@@ -3,7 +3,7 @@
 1) install eecodes version >= 2.22.1 
 https://confluence.ecmwf.int/display/ECC/Releases
 
-2) Create a new environment ```python3 -m venv mweatherrouter```
+2) Create a new environment ```python3 -m venv weather-router```
 
 3) Activate the new environment ```.\venv\Scripts\activate```
 
