@@ -1,4 +1,4 @@
-##Installation Instructions
+## Installation Instructions
 
 1) install eecodes version >= 2.22.1 
 https://confluence.ecmwf.int/display/ECC/Releases
