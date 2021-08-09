@@ -10,6 +10,8 @@ import pandas as pd
 from config import Config
 from utils import get_boat_speed, calculate_true_wind_angle
 
+#This file is not currently being used
+
 class PriorityQueue:
     '''
     Wrapper for heapq
