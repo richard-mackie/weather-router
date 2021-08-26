@@ -13,7 +13,8 @@ For detail about GNU see <http://www.gnu.org/licenses/>.
 '''
 
 import numpy as np
-import glob, os, time, requests, xarray, datetime
+import glob, os, time, requests, xarray
+from datetime import datetime, timezone, timedelta
 from config import Config
 
 
@@ -70,7 +71,10 @@ def get_gribs(degrees=1, left_lon=0, right_lon=360, top_lat=90, bottom_lat=-90, 
     FFF = ['000']
 
     if len(YYYYMMDD) == 0:
-        YYYYMMDD = str(datetime.datetime.now().date()).replace('-','')
+        current_date = datetime.now(timezone.utc).date()
+        # Hacky way to make sure there is a forecast available
+        previous_day = current_date - timedelta(days=1)
+        YYYYMMDD = str(previous_day).replace('-','')
     print('Downloading Gribs', end='', flush=True)
     for i in range(len(FFF)):
         print('.', end='', flush=True)
