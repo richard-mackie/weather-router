@@ -140,7 +140,6 @@ cython_debug/
 .idea/
 
 profiler.py
-Procfile
 
 
 
